@@ -17,13 +17,13 @@ current_milli_time = lambda: int(round(time.time() * 1000))
 
 # Constants
 # URL_APP_SERVER          = 'http://localhost:3001/'
-URL_APP_SERVER          = 'http://cloud-track.herokuapp.com'
+URL_APP_SERVER          = 'http://oucseniordesignv2.herokuapp.com'
 DISPLAY_SIZE            = (512, 384)
 MASK_RADIUS_RATIO       = 3.5
 SECONDS_PER_FRAME       = 1
 SECONDS_PER_PREDICTION  = 30
 
-# 
+#
 # LAT  = 28.603865
 # LONG = -81.199273
 
@@ -61,7 +61,7 @@ def initialize_socketio(url):
 def send_predictions(data):
     if sock is None:
         return
-        
+
     payload = {
         'cloudPrediction': {int(a) : int(b) for a,b in data}
     }
@@ -78,14 +78,14 @@ def send_coverage(coverage):
     coverage = np.round((cloud / (cloud + not_cloud)) * 100, 2)
 
     print(coverage)
-    
+
     sock.emit('coverage_data', { "cloud_coverage": coverage })
 
 def send_image(image, event_name):
     if send_images is False or sock is None:
         return
     success, im_buffer = cv2.imencode('.png', image)
-    
+
     if success is False:
         print("couldnt encode png image")
         return
@@ -110,9 +110,9 @@ def forecast_(queue, prev, next):
     after_forecast = current_milli_time()
 
     prediction_frequencies = np.array(np.unique(np.round(times), return_counts=True)).T
-    
+
     queue.put(prediction_frequencies)
-    
+
     elapsed_mask = (after_mask - before_)
     print('SUN MASK TOOK: %s ms' % elapsed_mask)
 
@@ -212,7 +212,7 @@ def experiment_ffmpeg_pipe(pipe):
     First = True
     BLOCK = False
 
-    
+
     prediction_queue = Queue()
 
     while True:
@@ -223,7 +223,7 @@ def experiment_ffmpeg_pipe(pipe):
             prev = prev.reshape((768,1024,3))
             prev = cv2.cvtColor(prev, cv2.COLOR_RGB2BGR)
             prev = np.fliplr(prev)
-            
+
             # throw away the data in the pipe's buffer.
             pipe.stdout.flush()
 
@@ -235,10 +235,10 @@ def experiment_ffmpeg_pipe(pipe):
             next = np.fliplr(next)
 
             # throw away the data in the pipe's buffer.
-            pipe.stdout.flush()    
+            pipe.stdout.flush()
 
             (prev, next, flow, coverage) = experiment_step(prev, next)
-            
+
             after = current_milli_time()
             if (after - before > (1000 * SECONDS_PER_PREDICTION)
                 or First is True) and BLOCK is False:
@@ -247,13 +247,13 @@ def experiment_ffmpeg_pipe(pipe):
                 p.start()
                 First = False
                 before = after
-            
+
             if(prediction_queue.empty() != True):
                 prediction_frequencies = prediction_queue.get()
                 print("Sending predictions", np.shape(prediction_frequencies))
                 send_predictions(prediction_frequencies)
                 BLOCK = False
-                
+
             send_cloud(flow)
             send_shadow(coverage)
             send_coverage(coverage)
