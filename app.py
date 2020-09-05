@@ -17,7 +17,7 @@ current_milli_time = lambda: int(round(time.time() * 1000))
 
 # Constants
 # URL_APP_SERVER          = 'http://localhost:3001/'
-URL_APP_SERVER          = 'http://oucseniordesignv2.herokuapp.com'
+URL_APP_SERVER          = 'https://cloudtracking-v2.herokuapp.com/'
 DISPLAY_SIZE            = (512, 384)
 MASK_RADIUS_RATIO       = 3.5
 SECONDS_PER_FRAME       = 1
