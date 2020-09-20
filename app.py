@@ -16,8 +16,8 @@ from sunPos import mask_sun
 current_milli_time = lambda: int(round(time.time() * 1000))
 
 # Constants
-# URL_APP_SERVER          = 'http://localhost:3001/'
-URL_APP_SERVER          = 'https://cloudtracking-v2.herokuapp.com/'
+URL_APP_SERVER          = 'http://localhost:3000/'
+# URL_APP_SERVER          = 'https://cloudtracking-v2.herokuapp.com/'
 DISPLAY_SIZE            = (512, 384)
 MASK_RADIUS_RATIO       = 3.5
 SECONDS_PER_FRAME       = 1
@@ -180,7 +180,7 @@ def experiment_display(prev, next, flow, coverage):
         return False
     return True
 
-def create_ffmpeg_pipe(video_path = None):
+def create_ffmpeg_pipe(video_path = 'opticalFlow/20191121-134744.mp4'):
     if video_path is None:
         command = [ 'ffmpeg',
             '-loglevel', 'panic',
@@ -270,7 +270,7 @@ def experiment_ffmpeg_pipe(pipe):
 def main():
     global sock
     sock = initialize_socketio(URL_APP_SERVER)
-    pipe = create_ffmpeg_pipe(None)
+    pipe = create_ffmpeg_pipe('opticalFlow/20191121-134744.mp4')
 
     experiment_ffmpeg_pipe(pipe)
     if sock is not None:

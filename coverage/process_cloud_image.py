@@ -5,7 +5,7 @@ import imageio
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw
 
-# Formula for caluclating saturation
+# Formula for calculating saturation
 def calc_sat(r, g, b):
     try:
         if (r < g < b):
