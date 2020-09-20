@@ -106,6 +106,8 @@ class WeatherDataDBRunner(Thread):
 			final_data = Train.toTimeSeries(self.weather_data, timesteps=3)
 			#print("final_data: " + str(final_data))
 			self.predicted_power = Predict.makePrediction(final_data, 15)
+			print("predicted power")
+			print(self.predicted_power)
 			perc = self.run_verification()
 			av = self.datalogger.weather_data.slrFD_W
 			vd = VerifiedData(self.the_date, perc, self.predicted_power, av)
