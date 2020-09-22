@@ -88,7 +88,18 @@ class WeatherDataDBRunner(Thread):
 		#creds will need to be created on each system
 		self.client = pymongo.MongoClient("mongodb+srv://" + creds.username + ":" + creds.password + "@cluster0.lgezy.mongodb.net/<dbname>?retryWrites=true&w=majority")
 		self.db = self.client.cloudTrackingData
-		self.datalogger = Datalogger('/dev/ttyS5') #path will need to change per system
+		datalogger_connected = False
+
+		while(not datalogger_connected):
+			try:
+				print("looking for datalogger")
+				self.datalogger = Datalogger('/dev/ttyS5') #path will need to change per system
+				datalogger_connected = True
+				print("datalogger connected")
+			except:
+				time.sleep(10) # wait 10 seconds then check if datalogger has been connected
+				print("datalogger not connected")
+			
 		self.sleep_time = 60 #60 seconds
 		self.predicted_power = 0
 		self.the_date = datetime.utcnow()
