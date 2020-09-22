@@ -95,7 +95,6 @@ class WeatherDataDBRunner(Thread):
 		self.weather_data = [] # includes 4 past weather datas and current weather data
 		self.get_previous_data()
 
-		
 	def run(self):
 		while(True):
 			starttime = time.time()
@@ -293,27 +292,3 @@ def main():
 		
 if __name__ == "__main__":
 	main()
-
-# Get the instrument from the PC port it's plugged into
-# and the modbus device address. Set mode to rtu.
-#ins = mmbus.Instrument('/dev/ttyS5', 1, mode='rtu') 
-
-# Just set some properties to match the datalogger
-#ins.debug = True
-#ins.serial.baudrate = 9600
-#ins.serial.bytesize = 8
-#ins.serial.parity = serial.PARITY_NONE
-#ins.serial.stopbits = 1
-#ins.serial.timeout = 2
-#print(ins)
-
-# Read 4 registers starting at register 1. There are 2 floats being
-# stored, so they use 4 registers in total.
-#data = ins.read_registers(1, number_of_registers=2, functioncode=3)
-#print('data: ' + str(data))
-
-# read a float starting at register 7. a float uses 2 registers
-# the first arguments to read_float is the register number to read
-#fl = ins.read_float(12, functioncode=3, number_of_registers=2, byteorder=0)
-#print('float ' + str(round(fl, 2)))
-
