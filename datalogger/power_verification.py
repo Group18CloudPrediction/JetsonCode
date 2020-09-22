@@ -98,6 +98,7 @@ class WeatherDataDBRunner(Thread):
 		
 	def run(self):
 		while(True):
+			starttime = time.time()
 			self.the_date = datetime.utcnow()
 			self.datalogger.poll() # get the current weather data to use for the next prediction
 			self.add_current_data()
@@ -105,16 +106,16 @@ class WeatherDataDBRunner(Thread):
 			#print(self.weather_data)
 			final_data = Train.toTimeSeries(self.weather_data, timesteps=3)
 			#print("final_data: " + str(final_data))
-			self.predicted_power = Predict.makePrediction(final_data, 15)
+			self.predicted_power = Predict.makePrediction(final_data, 15) # will return a list of length number of minutes
 			print("predicted power")
 			print(self.predicted_power)
+			self.send_power_prediction_data_to_db(predicted_power)
+			self.send_weather_data_to_db()
 			perc = self.run_verification()
 			av = self.datalogger.weather_data.slrFD_W
 			vd = VerifiedData(self.the_date, perc, self.predicted_power, av)
-			# self.send_power_prediction_data_to_db(predicted_power)
-			self.send_weather_data_to_db()
 			self.send_verification_data_to_db(vd)
-			time.sleep(self.sleep_time)
+			time.sleep(self.sleep_time - ((time.time() - starttime) % self.sleep_time))
 
 	def get_previous_data(self):
 		print("getting previous data")
@@ -160,6 +161,15 @@ class WeatherDataDBRunner(Thread):
 			
 	def send_power_prediction_data_to_db(self, predicted_power):
 		print("sending predicted power")
+		dt = self.the_date.replace(second=0, microsecond=0)
+		post = {"author": "power_prediction.py",
+				"power_predictions": predicted_power,
+				"prediction_start_time": dt,
+				"prediction_end_time": dt.replace(minute=dt.minute+15)}
+		
+		posts = self.db.PowerPredictions
+		post_id = posts.insert_one(post).inserted_id
+		print("post_id: " + str(post_id))
 
 	def send_weather_data_to_db(self):
 		print("sendind data to db")
@@ -182,6 +192,7 @@ class WeatherDataDBRunner(Thread):
 				"tags": ["weather_data", "datalogger", "weather", "weather_station", "verified_data"],
 				"date": self.the_date,
 				"date_mins_only": the_date.replace(second=0, microsecond=0),
+				"date_time_only": the_date.replace(year=1970, month=1, day=1),
 				"system_num": "PLACEHOLDER_REPLACE"}
 		
 		posts = self.db.WeatherData
@@ -202,9 +213,16 @@ class WeatherDataDBRunner(Thread):
 
 	def run_verification(self):
 		print("running verification")
-		real = self.datalogger.weather_data.slrFD_W
-		diff = abs(self.predicted_power - real)
-		error_perc = diff/real
+		 # This gets the most recent entry in the power prediction collection.
+		 # Then the first entry in the list of predictions will be the predicted power
+		 # 1 min in the future. This is what we want since this prediction was made
+		 # 1 minute ago
+		db_response = self.db.PowerPredictions.find().sort([('_id', -1)]).limit(1)
+		prev_preds = db_response['power_predictions']
+		prev_power = prev_preds[0]
+		print("real: " + str(prev_power))
+		diff = abs(self.datalogger.weather_data.slrFD_W - prev_power) # current data - most recent past data
+		error_perc = diff/prev_power
 		return error_perc * 100
 
 class Get_Data_On_Startup(Thread):
