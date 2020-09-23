@@ -4,4 +4,4 @@ node_modules/
 **/__pycache__/**
 
 #credentials
-/datalogger/creds.py
+/credentials/creds.py
