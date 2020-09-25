@@ -4,12 +4,14 @@ from scipy import signal
 import cv2
 
 # A few constants that are used in this program
-SUN_RADIUS    = 50   # Used to block the sun
+SUN_RADIUS = 50   # Used to block the sun
 SAT_THRESHOLD = 0.08  # Used for cloud detection
-SUN_THRESHOLD = 2.9375 # Used for sun detection
-FILTER_SIZE   = 25    # Used for noise reduction and locating the sun
+SUN_THRESHOLD = 2.9375  # Used for sun detection
+FILTER_SIZE = 25    # Used for noise reduction and locating the sun
 
 # Formula for caluclating saturation
+
+
 def _calc_sat(r, g, b):
     try:
         if (r < g < b):
@@ -21,11 +23,14 @@ def _calc_sat(r, g, b):
     except:
         return 1e9
 
+
 # Vectorize the functions above so that we can use numpy to easily apply the functions
 # to all pixels
 v_sat = np.vectorize(_calc_sat)
 
 # Calculate cloud-only image
+
+
 def cloud_recognition(img):
     # OpenCV opens images as GBR. We need to change it to RGB, convert it to a numpy array
     # and then normalize all the values
@@ -34,11 +39,13 @@ def cloud_recognition(img):
 
     # Locate the brightest pixel in the image (i.e. the sun) and cover it up so it doesn't
     # f*ck with our coverage code
-    intensity = img[:,:,0] + img[:,:,1] + img[:,:,2]
+    intensity = img[:, :, 0] + img[:, :, 1] + img[:, :, 2]
 
     # To eliminate noise and find the center of the sun, we're going to do a mean convolution
-    mean_matrix = np.full(shape=(FILTER_SIZE, FILTER_SIZE), fill_value=1/FILTER_SIZE**2)
-    convolved_intensity = signal.convolve2d(intensity, mean_matrix, mode='full', boundary='fill', fillvalue=0)
+    mean_matrix = np.full(shape=(FILTER_SIZE, FILTER_SIZE),
+                          fill_value=1/FILTER_SIZE**2)
+    convolved_intensity = signal.convolve2d(
+        intensity, mean_matrix, mode='full', boundary='fill', fillvalue=0)
 
     # locate the brightest pixel in the image (aka the pixel with the highest intensity value)
     max_intensity = np.amax(convolved_intensity)
@@ -56,7 +63,7 @@ def cloud_recognition(img):
         cv2.circle(img, (x, y), r, (255, 0, 0), -1)
 
     # Use the vectorized functions above and apply to every element of the matrix
-    sat = v_sat(img[:,:,2], img[:,:,1], img[:,:,0])
+    sat = v_sat(img[:, :, 2], img[:, :, 1], img[:, :, 0])
 
     # Change values to make output prettier
     sat = np.where(sat > SAT_THRESHOLD, 0, 1)

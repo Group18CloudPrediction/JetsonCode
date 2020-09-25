@@ -101,9 +101,8 @@ def forecast_(queue, prev, next):
     elapsed_forecast = (after_forecast - after_mask)
     print('FORECAST TOOK: %s ms' % elapsed_forecast)
 
+
 # Make all black pixels transparent
-
-
 def black2transparent(bgr):
     bgra = cv2.cvtColor(bgr, cv2.COLOR_BGR2BGRA)
     bgra[(bgra[:, :, 0:3] == [0, 0, 0]).all(2)] = (0, 0, 0, 0)
@@ -206,7 +205,7 @@ def experiment_ffmpeg_pipe(pipe):
         try:
             prev_rawimg = pipe.stdout.read(1024*768*3)
             # transform the byte read into a numpy array
-            prev = np.fromstring(prev_rawimg, dtype='uint8')
+            prev = np.frombuffer(prev_rawimg, dtype='uint8')
             prev = prev.reshape((768, 1024, 3))
             prev = cv2.cvtColor(prev, cv2.COLOR_RGB2BGR)
             prev = np.fliplr(prev)
@@ -216,7 +215,7 @@ def experiment_ffmpeg_pipe(pipe):
 
             next_rawimg = pipe.stdout.read(1024*768*3)
             # transform the byte read into a np array
-            next = np.fromstring(next_rawimg, dtype='uint8')
+            next = np.frombuffer(next_rawimg, dtype='uint8')
             next = next.reshape((768, 1024, 3))
             next = cv2.cvtColor(next, cv2.COLOR_RGB2BGR)
             next = np.fliplr(next)
@@ -226,6 +225,7 @@ def experiment_ffmpeg_pipe(pipe):
 
             (prev, next, flow, coverage) = experiment_step(prev, next)
 
+            # CRASHES SOMEWHERE HERE
             after = current_milli_time()
             if (after - before > (1000 * SECONDS_PER_PREDICTION)
                     or First is True) and BLOCK is False:
