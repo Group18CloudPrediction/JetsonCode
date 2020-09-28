@@ -69,6 +69,7 @@ class WeatherDataDBRunner(Thread):
 			
 		self.sleep_time = 60 #60 seconds
 		self.predicted_power = 0
+		self.predict_out_mins = 15
 		self.the_date = datetime.utcnow()
 		#self.weather_data = [] # includes 4 past weather datas and current weather data
 		#self.get_previous_data()
@@ -83,7 +84,7 @@ class WeatherDataDBRunner(Thread):
 			#print(self.weather_data)
 			final_data = Train.toTimeSeries(weather_data_list, timesteps=3)
 			#print("final_data: " + str(final_data))
-			self.predicted_power = Predict.makePrediction(final_data, 15) # will return a list of length number of minutes
+			self.predicted_power = Predict.makePrediction(final_data, self.predict_out_mins) # will return a list of length number of minutes
 			print("predicted power")
 			print(self.predicted_power)
 			self.send_power_prediction_data_to_db(self.predicted_power)
@@ -149,7 +150,7 @@ class WeatherDataDBRunner(Thread):
 		post = {"author": "power_prediction.py",
 				"power_predictions": predicted_power,
 				"prediction_start_time": dt,
-				"prediction_end_time": dt.replace(minute=dt.minute+15)}
+				"prediction_end_time": dt.replace(minute=dt.minute + self.predict_out_mins)}
 		
 		posts = self.db.PowerPredictionData
 		post_id = posts.insert_one(post).inserted_id
