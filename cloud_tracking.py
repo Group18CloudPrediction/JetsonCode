@@ -1,10 +1,14 @@
 import time
 import cv2
+from threading import Thread, Event
+import pymongo
 import numpy as np
 import subprocess as sp
 from multiprocessing import Process, Queue
 #import sys
 
+
+from credentials import creds
 import forecast
 from opticalFlow import opticalDense
 from coverage import coverage
@@ -33,80 +37,30 @@ do_mask = True
 do_crop = True
 
 
-def send_predictions(data):
-    if sock is None:
-        return
+def create_ffmpeg_pipe(video_path=None):
+    if video_path is None:
+        command = ['ffmpeg',
+                   '-loglevel', 'panic',
+                   '-nostats',
+                   '-rtsp_transport', 'tcp',
+                   '-i', 'rtsp://192.168.0.10:8554/CH001.sdp',
+                   '-s', '1024x768',
+                   '-f', 'image2pipe',
+                   '-pix_fmt', 'rgb24',
+                   '-vf', 'fps=fps=1/8',
+                   '-vcodec', 'rawvideo', '-']
+    else:
+        command = ['ffmpeg',
+                   '-loglevel', 'panic',
+                   '-nostats',
+                   '-i', video_path,
+                   '-s', '1024x768',
+                   '-f', 'image2pipe',
+                   '-pix_fmt', 'rgb24',
+                   '-vcodec', 'rawvideo', '-']
 
-    payload = {
-        'cloudPrediction': {int(a): int(b) for a, b in data}
-    }
-
-    sock.emit('predi', payload)
-
-
-def send_coverage(coverage):
-    if sock is None:
-        return
-
-    cloud = np.count_nonzero(coverage[:, :, 3] > 0)
-    not_cloud = np.count_nonzero(coverage[:, :, 3] == 0)
-
-    coverage = np.round((cloud / (cloud + not_cloud)) * 100, 2)
-
-    print(coverage)
-
-    sock.emit('coverage_data', {"cloud_coverage": coverage})
-
-
-def send_image(image, event_name):
-    if send_images is False or sock is None:
-        return
-    success, im_buffer = cv2.imencode('.png', image)
-
-    if success is False:
-        print("couldnt encode png image")
-        return
-
-    byte_image = im_buffer.tobytes()
-    sock.emit(event_name, byte_image)
-
-# send coverage image
-
-
-def send_cloud(frame):
-    send_image(frame, 'coverage')
-
-
-def send_shadow(coverage):
-    shadow = coverage.copy()
-    shadow[(shadow[:, :, 3] > 0)] = (0, 0, 0, 127)
-    send_image(shadow, 'shadow')
-
-
-def forecast_(queue, prev, next):
-    before_ = current_milli_time()
-    sun_center, sun_pixels = mask_sun(LAT, LONG)
-    after_mask = current_milli_time()
-    times = forecast.forecast(sun_pixels, prev, next, 1/SECONDS_PER_FRAME)
-    after_forecast = current_milli_time()
-
-    prediction_frequencies = np.array(
-        np.unique(np.round(times), return_counts=True)).T
-
-    queue.put(prediction_frequencies)
-
-    elapsed_mask = (after_mask - before_)
-    print('SUN MASK TOOK: %s ms' % elapsed_mask)
-
-    elapsed_forecast = (after_forecast - after_mask)
-    print('FORECAST TOOK: %s ms' % elapsed_forecast)
-
-
-# Make all black pixels transparent
-def black2transparent(bgr):
-    bgra = cv2.cvtColor(bgr, cv2.COLOR_BGR2BGRA)
-    bgra[(bgra[:, :, 0:3] == [0, 0, 0]).all(2)] = (0, 0, 0, 0)
-    return bgra
+    pipe = sp.Popen(command, stdout=sp.PIPE, bufsize=10**8)
+    return pipe
 
 
 def experiment_step(prev, next):
@@ -166,99 +120,158 @@ def experiment_display(prev, next, flow, coverage):
     return True
 
 
-def create_ffmpeg_pipe(video_path=None):
-    if video_path is None:
-        command = ['ffmpeg',
-                   '-loglevel', 'panic',
-                   '-nostats',
-                   '-rtsp_transport', 'tcp',
-                   '-i', 'rtsp://192.168.0.10:8554/CH001.sdp',
-                   '-s', '1024x768',
-                   '-f', 'image2pipe',
-                   '-pix_fmt', 'rgb24',
-                   '-vf', 'fps=fps=1/8',
-                   '-vcodec', 'rawvideo', '-']
-    else:
-        command = ['ffmpeg',
-                   '-loglevel', 'panic',
-                   '-nostats',
-                   '-i', video_path,
-                   '-s', '1024x768',
-                   '-f', 'image2pipe',
-                   '-pix_fmt', 'rgb24',
-                   '-vcodec', 'rawvideo', '-']
+def forecast_(queue, prev, next):
+    before_ = current_milli_time()
+    sun_center, sun_pixels = mask_sun(LAT, LONG)
+    after_mask = current_milli_time()
+    times = forecast.forecast(sun_pixels, prev, next, 1/SECONDS_PER_FRAME)
+    after_forecast = current_milli_time()
 
-    pipe = sp.Popen(command, stdout=sp.PIPE, bufsize=10**8)
-    return pipe
+    prediction_frequencies = np.array(
+        np.unique(np.round(times), return_counts=True)).T
+
+    queue.put(prediction_frequencies)
+
+    elapsed_mask = (after_mask - before_)
+    print('SUN MASK TOOK: %s ms' % elapsed_mask)
+
+    elapsed_forecast = (after_forecast - after_mask)
+    print('FORECAST TOOK: %s ms' % elapsed_forecast)
 
 
-def experiment_ffmpeg_pipe(pipe):
-    before = current_milli_time()
+class CloudTrackingRunner(Thread):
+    def __init__(self):
+        Thread.__init__(self)
 
-    # BRONZE SOLUTION
-    First = True
-    BLOCK = False
+        # creds will need to be created on each system
+        self.client = pymongo.MongoClient("mongodb+srv://" + creds.username + ":" +
+                                          creds.password + "@cluster0.lgezy.mongodb.net/<dbname>?retryWrites=true&w=majority")
+        self.db = self.client.cloudTrackingData
 
-    prediction_queue = Queue()
+        self.pipe = create_ffmpeg_pipe('opticalFlow/20191121-134744.mp4')
 
-    while True:
-        try:
-            prev_rawimg = pipe.stdout.read(1024*768*3)
-            # transform the byte read into a numpy array
-            prev = np.frombuffer(prev_rawimg, dtype='uint8')
-            prev = prev.reshape((768, 1024, 3))
-            prev = cv2.cvtColor(prev, cv2.COLOR_RGB2BGR)
-            prev = np.fliplr(prev)
+        self.prediction_queue = Queue()
 
-            # throw away the data in the pipe's buffer.
-            pipe.stdout.flush()
+        # BRONZE SOLUTION
+        self.First = True
+        self.BLOCK = False
 
-            next_rawimg = pipe.stdout.read(1024*768*3)
-            # transform the byte read into a np array
-            next = np.frombuffer(next_rawimg, dtype='uint8')
-            next = next.reshape((768, 1024, 3))
-            next = cv2.cvtColor(next, cv2.COLOR_RGB2BGR)
-            next = np.fliplr(next)
+    def run(self):
+        before = current_milli_time()
 
-            # throw away the data in the pipe's buffer.
-            pipe.stdout.flush()
+        while True:
+            try:
+                prev_rawimg = self.pipe.stdout.read(1024*768*3)
+                # transform the byte read into a numpy array
+                prev = np.frombuffer(prev_rawimg, dtype='uint8')
+                prev = prev.reshape((768, 1024, 3))
+                prev = cv2.cvtColor(prev, cv2.COLOR_RGB2BGR)
+                prev = np.fliplr(prev)
 
-            (prev, next, flow, coverage) = experiment_step(prev, next)
+                # throw away the data in the pipe's buffer.
+                self.pipe.stdout.flush()
 
-            # CRASHES SOMEWHERE HERE
-            after = current_milli_time()
-            if (after - before > (1000 * SECONDS_PER_PREDICTION)
-                    or First is True) and BLOCK is False:
-                BLOCK = True
-                p = Process(target=forecast_, args=(
-                    prediction_queue, prev, next))
-                p.start()
-                First = False
-                before = after
+                next_rawimg = self.pipe.stdout.read(1024*768*3)
+                # transform the byte read into a np array
+                next = np.frombuffer(next_rawimg, dtype='uint8')
+                next = next.reshape((768, 1024, 3))
+                next = cv2.cvtColor(next, cv2.COLOR_RGB2BGR)
+                next = np.fliplr(next)
 
-            if(prediction_queue.empty() != True):
-                prediction_frequencies = prediction_queue.get()
-                print("Sending predictions", np.shape(prediction_frequencies))
-                send_predictions(prediction_frequencies)
-                BLOCK = False
+                # throw away the data in the pipe's buffer.
+                self.pipe.stdout.flush()
 
-            send_cloud(flow)
-            send_shadow(coverage)
-            send_coverage(coverage)
+                (prev, next, flow, coverage) = experiment_step(prev, next)
 
-            # Break if ESC key was pressed
-            if (experiment_display(prev, next, flow, coverage) == False):
+                # CRASHES SOMEWHERE HERE
+                after = current_milli_time()
+                if (after - before > (1000 * SECONDS_PER_PREDICTION)
+                        or self.First is True) and self.BLOCK is False:
+                    self.BLOCK = True
+                    p = Process(target=forecast_, args=(
+                        self.prediction_queue, prev, next))
+                    p.start()
+                    self.First = False
+                    before = after
+
+                if(self.prediction_queue.empty() != True):
+                    prediction_frequencies = self.prediction_queue.get()
+                    print("Sending predictions", np.shape(
+                        prediction_frequencies))
+                    self.send_predictions(prediction_frequencies)
+                    BLOCK = False
+
+                self.send_cloud(flow)
+                self.send_shadow(coverage)
+                self.send_coverage(coverage)
+
+                # Break if ESC key was pressed
+                if (self.experiment_display(prev, next, flow, coverage) == False):
+                    break
+            except Exception as inst:
+                print(inst)
                 break
-        except Exception as inst:
-            print(inst)
-            break
-    return
+
+    def send_predictions(self, data):
+        post = {
+            'cloudPrediction': {int(a): int(b) for a, b in data}
+        }
+
+        posts = self.db.cloudPredictionData
+        post_id = posts.insert_one(post).inserted_id
+
+    def send_coverage(self, coverage):
+        cloud = np.count_nonzero(coverage[:, :, 3] > 0)
+        not_cloud = np.count_nonzero(coverage[:, :, 3] == 0)
+
+        coverage = np.round((cloud / (cloud + not_cloud)) * 100, 2)
+
+        print(coverage)
+
+        post = {
+            "cloud_coverage": coverage
+        }
+
+        posts = self.db.cloudCoverageData
+        post_id = posts.insert_one(post).inserted_id
+
+    # send coverage image
+    def send_cloud(self, frame):
+        success, im_buffer = cv2.imencode('.png', frame)
+
+        if success is False:
+            print("couldnt encode png image")
+            return
+
+        byte_image = im_buffer.tobytes()
+        post = {
+            'coverage': byte_image
+        }
+
+        posts = self.db.coverage
+        post_id = posts.insert_one(post).inserted_id
+
+    def send_shadow(self, coverage):
+        shadow = coverage.copy()
+        shadow[(shadow[:, :, 3] > 0)] = (0, 0, 0, 127)
+        success, im_buffer = cv2.imencode('.png', shadow)
+
+        if success is False:
+            print("couldnt encode png image")
+            return
+
+        byte_image = im_buffer.tobytes()
+        post = {
+            'shadow': byte_image
+        }
+
+        posts = self.db.coverage
+        post_id = posts.insert_one(post).inserted_id
 
 
 def main():
-    pipe = create_ffmpeg_pipe('opticalFlow/20191121-134744.mp4')
-
-    experiment_ffmpeg_pipe(pipe)
+    cloudtracking_runner = CloudTrackingRunner()
+    cloudtracking_runner.start()
 
 
 main()

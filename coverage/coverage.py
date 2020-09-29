@@ -13,6 +13,7 @@ FILTER_SIZE = 25    # Used for noise reduction and locating the sun
 
 
 def _calc_sat(r, g, b):
+    np.seterr('raise')
     try:
         if (r < g < b):
             return 1 - (3 * r) / (r + b + g)
