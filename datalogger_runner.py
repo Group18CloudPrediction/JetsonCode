@@ -2,7 +2,8 @@ import time
 from datetime import datetime
 from threading import Thread, Event
 import pymongo
-import credentials.creds as creds
+import config.creds as creds
+import config.substation_info as substation
 from datalogger.datalogger import Datalogger
 
 class DataloggerThread(Thread):
@@ -39,7 +40,7 @@ class DataloggerThread(Thread):
 	def send_weather_data_to_db(self):
 		print("sendind data to db")
 		the_date = self.the_date
-		post = {"author": "datalogger",
+		post = {"author": "datalogger_runner.py",
 				"slrFD_W": self.datalogger.weather_data.slrFD_W,
 				"rain_mm": self.datalogger.weather_data.rain_mm,
 				"strikes": self.datalogger.weather_data.strikes,
@@ -57,7 +58,7 @@ class DataloggerThread(Thread):
 				"tags": ["weather_data", "datalogger", "weather", "weather_station", "verified_data"],
 				"date": self.the_date,
 				"date_mins_only": the_date.replace(second=0, microsecond=0),
-				"system_num": "PLACEHOLDER_REPLACE"}
+				"system_num": substation.id}
 		
 		posts = self.db.WeatherData
 		post_id = posts.insert_one(post).inserted_id
@@ -69,4 +70,3 @@ def main():
 		
 if __name__ == "__main__":
 	main()
-

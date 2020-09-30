@@ -2,16 +2,17 @@ import minimalmodbus as mmbus
 import serial
 import time
 import pymongo
-import credentials.creds as creds
+import config.creds as creds
+import config.substation_info as substation
 import power_prediction.Predict as Predict
 import power_prediction.Train as Train
 
 from datalogger.datalogger import Datalogger
 from threading import Thread, Event
-from datetime import datetime
+from datetime import datetime, timedelta
 
 weather_data_list = []
-mins_of_previous_data = 5 # how many minutes of data to store in weather_data_list
+mins_of_previous_data = 3 # how many minutes of data to store in weather_data_list
 
 def format_current_weather_data(datalogger):
 	temp = []
@@ -83,15 +84,15 @@ class WeatherDataDBRunner(Thread):
 			#print("weather data before to timeseries")
 			#print(self.weather_data)
 			final_data = Train.toTimeSeries(weather_data_list, timesteps=3)
-			#print("final_data: " + str(final_data))
+			print("final_data: " + str(final_data))
 			self.predicted_power = Predict.makePrediction(final_data, self.predict_out_mins) # will return a list of length number of minutes
 			print("predicted power")
 			print(self.predicted_power)
 			self.send_power_prediction_data_to_db(self.predicted_power)
 			self.send_weather_data_to_db()
-			perc = self.run_verification()
+			perc, pd = self.run_verification() # returns error percentage and predicted power value
 			av = self.datalogger.weather_data.slrFD_W
-			vd = VerifiedData(self.the_date, perc, self.predicted_power, av)
+			vd = VerifiedData(self.the_date, perc, pd, av)
 			self.send_verification_data_to_db(vd)
 			print("starting to sleep")
 			time.sleep(self.sleep_time - ((time.time() - starttime) % self.sleep_time))
@@ -119,38 +120,14 @@ class WeatherDataDBRunner(Thread):
 			#print("temp_list len: " + str(len(temp_list)))
 			#print(temp_list)
 
-	'''
-	def add_current_data(self):
-		print("shifting previous weather data")
-		global weather_data_list
-		weather_data_list.pop()
-		#cur_data = self.format_current_weather_data()
-		cur_data = format_current_weather_data(self.datalogger)
-		print("cur_data: " + str(cur_data))
-		weather_data_list.insert(0, cur_data) # should use a deque but maybe will fix later
-	'''
-	'''
-	def format_current_weather_data(self):
-		temp = []
-		temp.append(self.datalogger.weather_data.slrFD_W)
-		temp.append(self.datalogger.weather_data.windDir)
-		temp.append(self.datalogger.weather_data.ws_ms)
-		temp.append(self.datalogger.weather_data.airT_C)
-		temp.append(self.datalogger.weather_data.poll_time.month)
-		temp.append(self.datalogger.weather_data.poll_time.day)
-		temp.append(self.datalogger.weather_data.poll_time.hour)
-		temp.append(self.datalogger.weather_data.poll_time.minute)
-
-		return temp
-	'''
-
 	def send_power_prediction_data_to_db(self, predicted_power):
 		print("sending predicted power")
 		dt = self.the_date.replace(second=0, microsecond=0)
 		post = {"author": "power_prediction.py",
 				"power_predictions": predicted_power,
 				"prediction_start_time": dt,
-				"prediction_end_time": dt.replace(minute=dt.minute + self.predict_out_mins)}
+				"prediction_end_time": dt + timedelta(minutes=len(predicted_power)), #length will correspond to number of minutes in prediction
+				"system_num": substation.id}
 		
 		posts = self.db.PowerPredictionData
 		post_id = posts.insert_one(post).inserted_id
@@ -159,7 +136,7 @@ class WeatherDataDBRunner(Thread):
 	def send_weather_data_to_db(self):
 		print("sendind data to db")
 		the_date = self.the_date
-		post = {"author": "datalogger",
+		post = {"author": "power_prediction.py",
 				"slrFD_W": self.datalogger.weather_data.slrFD_W,
 				"rain_mm": self.datalogger.weather_data.rain_mm,
 				"strikes": self.datalogger.weather_data.strikes,
@@ -178,7 +155,7 @@ class WeatherDataDBRunner(Thread):
 				"date": self.the_date,
 				"date_mins_only": the_date.replace(second=0, microsecond=0),
 				"date_time_only": the_date.replace(year=1970, month=1, day=1),
-				"system_num": "PLACEHOLDER_REPLACE"}
+				"system_num": substation.id}
 		
 		posts = self.db.WeatherData
 		post_id = posts.insert_one(post).inserted_id
@@ -186,11 +163,12 @@ class WeatherDataDBRunner(Thread):
 
 	def send_verification_data_to_db(self, vd):
 		print("sending verification info to db")
-		post = {"author": "datalogger",
+		post = {"author": "power_prediction.py",
 				"percentage_error": vd.percentage,
-				"predicted_power": vd.predicted_value,
-				"actual_power": vd.actual_value,
-				"verified_time": vd.verified_time}
+				"predicted_power_kw": vd.predicted_value,
+				"actual_power_kw": vd.actual_value,
+				"verified_time": vd.verified_time,
+				"system_num": substation.id}
 		
 		posts = self.db.PowerVerificationData
 		post_id = posts.insert_one(post).inserted_id
@@ -199,25 +177,30 @@ class WeatherDataDBRunner(Thread):
 	def run_verification(self):
 		print("running verification")
 		prev_preds = None
+		prev_power = -1
 		 # This gets the most recent entry in the power prediction collection.
 		 # Then the first entry in the list of predictions will be the predicted power
 		 # 1 min in the future. This is what we want since this prediction was made
 		 # 1 minute ago
-		db_response = self.db.PowerPredictions.find().sort([('_id', -1)]).limit(1)
+		db_response = self.db.PowerPredictionData.find().sort([('_id', -1)]).limit(1)
+		#print("db response " + str(db_response))
 
 		# find returns a 'cursor' to the document, not the actual document so you
 		# must iterate the cursor to get the document
 		for doc in db_response:
-			prev_preds = db_response['power_predictions']
-		
+			prev_preds = doc['power_predictions']
+			#print("prev preds in loop " + str(prev_preds))
+
+		#print("prev preds " + str(prev_preds))
 		if prev_preds is not None:
-			prev_power = prev_preds[0]
-			print("real: " + str(prev_power))
-			diff = abs(self.datalogger.weather_data.slrFD_W - prev_power) # current data - most recent past data
-			error_perc = diff/prev_power
-			return error_perc * 100
+			prev_power_pred = prev_preds[0]
+			prev_power_real = (self.datalogger.weather_data.slrFD_W * substation.panel_area / substation.kw) * substation.panel_eff
+			#print("real: " + str(prev_power))
+			diff = abs(prev_power_real - prev_power_pred) # current data - most recent past data
+			error_perc = diff/prev_power_pred
+			return (error_perc * 100), prev_power_pred
 		
-		return -1
+		return -1, prev_power # an error so return -1
 
 class Get_Data_On_Startup(Thread):
 	def __init__(self, finished_getting_data_event=None):
@@ -226,31 +209,35 @@ class Get_Data_On_Startup(Thread):
 		#global weather_data_list
 		#weather_data_list.clear()
 		self.finished_getting_data_event = finished_getting_data_event
-		self.run_num = 0
+		self.run_num = 1
 		self.client = pymongo.MongoClient("mongodb+srv://" + creds.username + ":" + creds.password + "@cluster0.lgezy.mongodb.net/<dbname>?retryWrites=true&w=majority")
 		self.db = self.client.cloudTrackingData
 		self.datalogger = Datalogger('/dev/ttyS5') #path will need to change per system
 		self.sleep_time = 60 #60 seconds
 
-
 	def run(self):
-		while(self.run_num < mins_of_previous_data):
+		while(True):
+			starttime = time.time()
 			print("getting data on start run " + str(self.run_num))
 			self.the_date = datetime.utcnow()
 			self.datalogger.poll()
 			add_current_data(self.datalogger)
 			self.send_weather_data_to_db()
+
+			if self.run_num == mins_of_previous_data: #got all the data we need
+				break
+
 			self.run_num = self.run_num + 1
-			time.sleep(self.sleep_time)
+			time.sleep(self.sleep_time - ((time.time() - starttime) % self.sleep_time))
 		
-		print("Got 5 mins of data")
+		print("Got " + str(mins_of_previous_data) + " mins of data")
 		self.finished_getting_data_event.set()
 
-# NOTE: will want to refactor to avoid replicating this code
+# NOTE: will want to refactor to avoid replicating this code maybe
 	def send_weather_data_to_db(self):
 		print("sendind data to db")
 		the_date = self.the_date
-		post = {"author": "datalogger",
+		post = {"author": "power_prediction.py",
 				"slrFD_W": self.datalogger.weather_data.slrFD_W,
 				"rain_mm": self.datalogger.weather_data.rain_mm,
 				"strikes": self.datalogger.weather_data.strikes,
@@ -268,20 +255,28 @@ class Get_Data_On_Startup(Thread):
 				"tags": ["weather_data", "datalogger", "weather", "weather_station", "verified_data"],
 				"date": self.the_date,
 				"date_mins_only": the_date.replace(second=0, microsecond=0),
-				"system_num": "PLACEHOLDER_REPLACE"}
+				"date_time_only": the_date.replace(year=1970, month=1, day=1),
+				"system_num": substation.id}
 		
 		posts = self.db.WeatherData
 		post_id = posts.insert_one(post).inserted_id
 		print("post_id: " + str(post_id))
-
-
 		
 def main():
-	finished_getting_data_event = Event()
+	dbg = True
+	if dbg:
+		global weather_data_list
+		weather_data_list =[[0.0, 261.70001220703125, 0.15000000596046448, 24.799999237060547, 9, 28, 21, 53],
+		[0.0, 254.10000610351562, 0.05999999865889549, 24.700000762939453, 9, 28, 21, 52],
+		[0.0, 237.1999969482422, 0.05999999865889549, 24.700000762939453, 9, 28, 21, 51]]
+		print(weather_data_list)
+	else:
+		finished_getting_data_event = Event()
+		get_data_on_startup = Get_Data_On_Startup(finished_getting_data_event)
+		get_data_on_startup.start()
+		finished_getting_data_event.wait()
+
 	weather_data_db_runner = WeatherDataDBRunner()
-	get_data_on_startup = Get_Data_On_Startup(finished_getting_data_event)
-	get_data_on_startup.start()
-	finished_getting_data_event.wait()
 	print("============================")
 	print("STARTING MAIN WORKER THREAD")
 	print("============================")
