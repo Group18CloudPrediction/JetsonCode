@@ -10,14 +10,16 @@ import os
 # also ignore leap second warnings
 # the lat, long will be of the camera
 def get_sun(lat, long, date):
+    """Retrieves sun azimuth and altitude"""
     altitude = get_altitude(lat, long, date)
     azimuth = get_azimuth(lat, long, date)
     return azimuth, altitude
 
 
 def mask_sun(lat, long):
-    # date = tzlocal.get_localzone().localize(datetime.now())
-    date = datetime(2019, 11, 24, 13, 17, 00, tzinfo=tzlocal.get_localzone())
+    """Returns point at center of sun and pixel mask for sun."""
+    date = tzlocal.get_localzone().localize(datetime.now())
+    # date = datetime(2019, 11, 24, 13, 17, 00, tzinfo=tzlocal.get_localzone())
     # frame = cv2.resize(frame1, (640, 480))
 
     # 2.) Find sun using (azimuth, altitude)
