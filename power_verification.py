@@ -2,6 +2,7 @@ import minimalmodbus as mmbus
 import serial
 import time
 import pymongo
+import pickle
 import config.creds as creds
 import config.substation_info as substation
 import power_prediction.Predict as Predict
@@ -88,12 +89,10 @@ class WeatherDataDBRunner(Thread):
 			self.predicted_power = Predict.makePrediction(final_data, self.predict_out_mins) # will return a list of length number of minutes
 			print("predicted power")
 			print(self.predicted_power)
+			vd_list = self.run_verification() # returns error percentage and predicted power value
 			self.send_power_prediction_data_to_db(self.predicted_power)
 			self.send_weather_data_to_db()
-			perc, pd = self.run_verification() # returns error percentage and predicted power value
-			av = self.datalogger.weather_data.slrFD_W
-			vd = VerifiedData(self.the_date, perc, pd, av)
-			self.send_verification_data_to_db(vd)
+			self.send_verification_data_to_db(vd_list)
 			print("starting to sleep")
 			time.sleep(self.sleep_time - ((time.time() - starttime) % self.sleep_time))
 
@@ -163,11 +162,10 @@ class WeatherDataDBRunner(Thread):
 
 	def send_verification_data_to_db(self, vd):
 		print("sending verification info to db")
+		dump = pickle.dumps(vd)
 		post = {"author": "power_prediction.py",
-				"percentage_error": vd.percentage,
-				"predicted_power_kw": vd.predicted_value,
-				"actual_power_kw": vd.actual_value,
-				"verified_time": vd.verified_time,
+				"verified_power_data": dump,
+				"verified_time": vd[0].verified_time, # just use the time of the first object in list
 				"system_num": substation.id}
 		
 		posts = self.db.PowerVerificationData
@@ -178,30 +176,28 @@ class WeatherDataDBRunner(Thread):
 		print("running verification")
 		prev_preds = None
 		prev_power = -1
-		 # This gets the most recent entry in the power prediction collection.
-		 # Then the first entry in the list of predictions will be the predicted power
-		 # 1 min in the future. This is what we want since this prediction was made
-		 # 1 minute ago
-		db_response = self.db.PowerPredictionData.find().sort([('_id', -1)]).limit(1)
-		#print("db response " + str(db_response))
+		min_offset = self.predict_out_mins
+		verified_data_list = []
+		 # This gets the 15 most recent entries in the power prediction collection.
+		db_response = self.db.PowerPredictionData.find().sort([('_id', -1)]).limit(15)
 
 		# find returns a 'cursor' to the document, not the actual document so you
 		# must iterate the cursor to get the document
 		for doc in db_response:
 			prev_preds = doc['power_predictions']
-			#print("prev preds in loop " + str(prev_preds))
 
-		#print("prev preds " + str(prev_preds))
-		if prev_preds is not None:
-			prev_power_pred = prev_preds[0]
-			prev_power_real = (self.datalogger.weather_data.slrFD_W * substation.panel_area / substation.kw) * substation.panel_eff
-			#print("real: " + str(prev_power))
-			diff = abs(prev_power_real - prev_power_pred) # current data - most recent past data
-			error_perc = diff/prev_power_pred
-			return (error_perc * 100), prev_power_pred
+			if prev_preds is not None:
+				prev_power_pred = prev_preds[self.predict_out_mins - min_offset]
+				min_offset = min_offset - 1
+				prev_power_real = (self.datalogger.weather_data.slrFD_W * substation.panel_area / substation.kw) * substation.panel_eff
+				#print("real: " + str(prev_power))
+				diff = abs(prev_power_real - prev_power_pred) # current data - most recent past data
+				error_perc = diff/prev_power_pred * 100
+				vd = VerifiedData(self.the_date, error_perc, prev_power_pred, prev_power_real)
+				verified_data_list.append(vd)
 		
-		return -1, prev_power # an error so return -1
-
+		return verified_data_list
+		
 class Get_Data_On_Startup(Thread):
 	def __init__(self, finished_getting_data_event=None):
 		Thread.__init__(self)
