@@ -41,14 +41,14 @@ def add_current_data(datalogger):
 	weather_data_list.insert(0, cur_data) # should use a deque but maybe will fix later
 	print("weather data list: " + str(weather_data_list))
 
-class VerifiedData:
+class VerifiedPowerData:
 	def __init__(self, dt, perc, pv, av):
-		self.verified_time = str(dt)
-		self.percentage = str(perc)
+		self.verified_time = dt
+		self.percentage = perc
 		self.predicted_value = pv
 		self.actual_value = av
 
-class WeatherDataDBRunner(Thread):
+class PowerPredictionRunner(Thread):
 	def __init__(self):
 		Thread.__init__(self)
 		#setup db here
@@ -193,7 +193,7 @@ class WeatherDataDBRunner(Thread):
 				#print("real: " + str(prev_power))
 				diff = abs(prev_power_real - prev_power_pred) # current data - most recent past data
 				error_perc = diff/prev_power_pred * 100
-				vd = VerifiedData(self.the_date, error_perc, prev_power_pred, prev_power_real)
+				vd = VerifiedPowerData(self.the_date, error_perc, prev_power_pred, prev_power_real)
 				verified_data_list.append(vd)
 		
 		return verified_data_list
@@ -259,7 +259,7 @@ class Get_Data_On_Startup(Thread):
 		print("post_id: " + str(post_id))
 		
 def main():
-	dbg = True
+	dbg = False
 	if dbg:
 		global weather_data_list
 		weather_data_list =[[0.0, 261.70001220703125, 0.15000000596046448, 24.799999237060547, 9, 28, 21, 53],
@@ -272,11 +272,11 @@ def main():
 		get_data_on_startup.start()
 		finished_getting_data_event.wait()
 
-	weather_data_db_runner = WeatherDataDBRunner()
+	power_prediction_runner = PowerPredictionRunner()
 	print("============================")
 	print("STARTING MAIN WORKER THREAD")
 	print("============================")
-	weather_data_db_runner.start()
+	power_prediction_runner.start()
 		
 if __name__ == "__main__":
 	main()
