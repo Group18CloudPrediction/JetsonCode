@@ -1,1 +1,1 @@
-#mongo
+# mongodb credentials
