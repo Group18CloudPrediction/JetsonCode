@@ -1,4 +1,1 @@
-# mongodb credentials
-
-username = "mainuser"
-password = "xkOKkwnM1Eb5FYC6"
+#mongo

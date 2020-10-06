@@ -55,7 +55,7 @@ class PowerPredictionRunner(Thread):
 		print("setup db here")
 
 		#creds will need to be created on each system
-		self.client = pymongo.MongoClient("mongodb+srv://" + creds.username + ":" + creds.password + "@cluster0.lgezy.mongodb.net/<dbname>?retryWrites=true&w=majority")
+		self.client = pymongo.MongoClient(creds.base_url + creds.username + creds.separator + creds.password + creds.cluster_url)
 		self.db = self.client.cloudTrackingData
 		datalogger_connected = False
 

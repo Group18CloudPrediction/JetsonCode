@@ -4,4 +4,4 @@ node_modules/
 **/__pycache__/**
 
 #credentials
-/credentials/creds.py
+/config/creds.py
