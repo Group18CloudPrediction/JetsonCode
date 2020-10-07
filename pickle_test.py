@@ -1,3 +1,5 @@
+# test script to pickle and unpickle data
+
 import pymongo
 import config.creds as creds
 import pickle
