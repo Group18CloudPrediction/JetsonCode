@@ -3,6 +3,7 @@ import numpy as np
 
 
 def create_fisheye_mask(prev, next, mask_radius=3):
+    """Creates a mask for the fisheye lens"""
     h, w, ch = prev.shape
     center = (int(w / 2), int(h / 2))
     radius = int(w / mask_radius)
@@ -15,13 +16,31 @@ def create_fisheye_mask(prev, next, mask_radius=3):
 
     maskedNext = np.zeros_like(next)
     maskedNext[mask > 0] = next[mask > 0]
-
+    cv2.imshow("fisheye masked", maskedPrev)
+    cv2.waitKey(0)
     return maskedPrev, maskedNext
 
-# Ugly manual way of creating a mask w/ a trackbar
+
+def image_crop(img, mask_radius_ratio=3.5):
+    """Crops the inputted image according to mask radius ratio"""
+    w = img.shape[0]
+    h = img.shape[1]
+    s = w / mask_radius_ratio
+
+    top_edge = int(h/2-s)
+    bottom_edge = int(h/2 + s)
+
+    left_edge = int(w/2-s)
+    right_edge = int(w/2 + s)
+
+    croppedImg = img[left_edge:right_edge,  top_edge:bottom_edge, :]
+    cv2.imshow("Cropped image", croppedImg)
+    cv2.waitKey(0)
+    return croppedImg
 
 
 def create_mask_displayed(frame):
+    """Ugly manual way of creating a mask w/ a trackbar"""
     h, w, ch = frame.shape
     halfsies = (int(w / 4), int(h / 4))
     frame = cv2.resize(frame, halfsies)

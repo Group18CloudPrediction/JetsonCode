@@ -47,14 +47,3 @@ def euclid(p1, p2, r=0):
     b = np.array(p2)
     distance = np.linalg.norm(b-a) - r
     return distance
-
-
-def forecast(sun_pixels, prev, next, fps):
-    # Sun center (x, y) from the mask produced by sun tracker
-
-    prev = cv2.resize(prev, (640, 480))
-    next = cv2.resize(next, (640, 480))
-    flow = opticalDense.calculate_opt_dense(prev, next)
-    __, x_i, x_f = opticalDense.draw_arrows(next, flow, 10)
-
-    return get_time(x_i, x_f, sun_pixels, 18, fps)

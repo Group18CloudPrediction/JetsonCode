@@ -9,25 +9,27 @@ import pymongo
 
 import forecast
 from credentials import creds
-from imageProcessing import coverage, create_fisheye_mask as fisheye
+from imageProcessing import fisheye_mask as fisheye
+from imageProcessing.coverage import cloud_recognition
+from imageProcessing.sunPos import mask_sun_pixel, mask_sun_pysolar
 from opticalFlow import opticalDense
-from sunPos import mask_sun
-
-# VALUES
 
 
 def current_milli_time(): return int(round(time.time() * 1000))
 
 
+# VALUES
+VIDEO_PATH = 'opticalFlow/test1sec.mp4'
+
 # CONSTANTS
 DISPLAY_SIZE = (512, 384)
-MASK_RADIUS_RATIO = 3.5
 SECONDS_PER_FRAME = 1
 SECONDS_PER_PREDICTION = 30
 LAT = 28.601722
 LONG = -81.198545
 
 # FLAGS
+livestream_online = False
 display_images = True
 send_images = True
 do_coverage = True
@@ -35,9 +37,9 @@ do_mask = True
 do_crop = True
 
 
-def create_ffmpeg_pipe(video_path=None):
+def create_ffmpeg_pipe():
     """Creates + executes command ffmpeg for video stream, and returns pipe"""
-    if video_path is None:
+    if livestream_online is True:
         command = ['ffmpeg',
                    '-loglevel', 'panic',
                    '-nostats',
@@ -52,7 +54,7 @@ def create_ffmpeg_pipe(video_path=None):
         command = ['ffmpeg',
                    '-loglevel', 'panic',
                    '-nostats',
-                   '-i', video_path,
+                   '-i', VIDEO_PATH,
                    '-s', '1024x768',
                    '-f', 'image2pipe',
                    '-pix_fmt', 'rgb24',
@@ -65,41 +67,39 @@ def create_ffmpeg_pipe(video_path=None):
 def experiment_step(prev, next):
     before = current_milli_time()
     clouds = None
+    sun_center = None
+    sun_pixels = None
+
+    # Apply fisheye mask
     if do_mask is True:
         prev, next = fisheye.create_fisheye_mask(prev, next)
 
+    # crop image to square to eliminate curved lens interference
     if do_crop is True:
-        w = prev.shape[0]
-        h = prev.shape[1]
-        s = w / MASK_RADIUS_RATIO
+        prev = fisheye.image_crop(prev)
+        next = fisheye.image_crop(next)
 
-        top_edge = int(h/2-s)
-        bottom_edge = int(h/2 + s)
+    # Locate center of sun + pixels that are the sun if livestream is on
+    if livestream_online is True:
+        sun_center, sun_pixels = mask_sun_pysolar(LAT, LONG)
+    else:
+        # If livestream isn't on, sun must be located by pixel, as time and long_lat coordinates aren't available to use pysolar
+        sun_center = mask_sun_pixel(next)
 
-        left_edge = int(w/2-s)
-        right_edge = int(w/2 + s)
-        prev = prev[left_edge:right_edge,  top_edge:bottom_edge, :]
-        next = next[left_edge:right_edge,  top_edge:bottom_edge, :]
+    # Convert pixel RGB values to not sun (0) or sun (255)
+    clouds = cloud_recognition(next, sun_center)
 
     # Find the flow vectors for the prev and next images
     flow_vectors = opticalDense.calculate_opt_dense(prev, next)
 
-    cv2.imshow('prev', prev)
-    cv2.waitKey(0)
-    cv2.imshow('next', next)
-    cv2.waitKey(0)
-    # Convert pixel RGB values to not sun (0) or sun (255)
-    clouds = coverage.cloud_recognition(next)
-    cv2.imshow('cloud', clouds)
-    cv2.waitKey(0)
     # Draw vector field based on cloud/not cloud image and displacement vectors
-    flow, _, _ = opticalDense.draw_arrows(clouds.copy(), flow_vectors)
+    flow, x_i, x_f = opticalDense.draw_arrows(clouds.copy(), flow_vectors, 10)
 
     after = current_milli_time()
     print('Experiment step took: %s ms' % (after - before))
 
     # Return experiment step
-    return (prev, next, flow, clouds)
+    return (clouds, flow, x_i, x_f, sun_pixels)
 
 
 def experiment_display(prev, next, flow, coverage):
@@ -123,26 +123,14 @@ def experiment_display(prev, next, flow, coverage):
     return True
 
 
-'''
-def forecast_(queue, prev, next):
-    before_ = current_milli_time()
-    sun_center, sun_pixels = mask_sun(LAT, LONG)
-    after_mask = current_milli_time()
-
-    times = forecast.forecast(sun_pixels, prev, next, 1/SECONDS_PER_FRAME)
-    after_forecast = current_milli_time()
+def forecast_(queue, x_i, x_f, sun_pixels):
+    times = forecast.get_time(
+        x_i, x_f, sun_pixels, 18, 1/SECONDS_PER_FRAME)
 
     prediction_frequencies = np.array(
         np.unique(np.round(times), return_counts=True)).T
 
     queue.put(prediction_frequencies)
-
-    elapsed_mask = (after_mask - before_)
-    print('SUN MASK TOOK: %s ms' % elapsed_mask)
-
-    elapsed_forecast = (after_forecast - after_mask)
-    print('FORECAST TOOK: %s ms' % elapsed_forecast)
-'''
 
 
 def byteRead_to_npArray(rawimg):
@@ -163,9 +151,9 @@ class CloudTrackingRunner(Thread):
                                           creds.password + "@cluster0.lgezy.mongodb.net/<dbname>?retryWrites=true&w=majority")
         self.db = self.client.cloudTrackingData
 
-        # self.pipe = create_ffmpeg_pipe('opticalFlow/20191121-134744.mp4')
-        self.pipe = create_ffmpeg_pipe('opticalFlow/test1sec.mp4')
-        # self.prediction_queue = Queue()
+        self.pipe = create_ffmpeg_pipe()
+
+        self.prediction_queue = Queue()
 
         self.sleep_time = 60
 
@@ -177,25 +165,26 @@ class CloudTrackingRunner(Thread):
                 # grab frame from pipe
                 prev_rawimg = self.pipe.stdout.read(1024*768*3)
                 prev = byteRead_to_npArray(prev_rawimg)
-
                 # throw away the data in the pipe's buffer.
                 self.pipe.stdout.flush()
+
+                time.sleep(10)
 
                 # grab next frame from pipe
                 next_rawimg = self.pipe.stdout.read(1024*768*3)
                 next = byteRead_to_npArray(next_rawimg)
-
                 # throw away the data in the pipe's buffer.
                 self.pipe.stdout.flush()
 
-                (prev, next, flow, coverage) = experiment_step(prev, next)
+                (cloudPNG, flow, x_i, x_f,
+                 sun_pixels) = experiment_step(prev, next)
 
                 after = current_milli_time()
-                '''
+
                 if (after - before > (1000 * SECONDS_PER_PREDICTION)):
-                # p = Process(target=forecast_, args=(queue, prev, next))
-                # p.start()
-                    forecast_(self.prediction_queue, prev, next)
+                    # p = Process(target=forecast_, args=(queue, prev, next))
+                    # p.start()
+                    forecast_(self.prediction_queue, x_i, x_f, sun_pixels)
 
                 # if prediction queue isn't empty, send predictions to MongoDB
                 if(self.prediction_queue.empty() != True):
@@ -203,15 +192,11 @@ class CloudTrackingRunner(Thread):
                     print("Sending predictions", np.shape(
                         prediction_frequencies))
                     self.send_predictions(prediction_frequencies)
-                '''
+
                 # Send cloud coverage data, cloud image, and shadow image to MongoDB
                 self.send_cloud(flow)
-                self.send_shadow(coverage)
-                self.send_coverage(coverage)
-
-                # Break if ESC key was pressed
-                if (experiment_display(prev, next, flow, coverage) == False):
-                    break
+                self.send_shadow(cloudPNG)
+                self.send_coverage(cloudPNG)
 
             except Exception as inst:
                 print(inst)
@@ -220,7 +205,6 @@ class CloudTrackingRunner(Thread):
             time.sleep(self.sleep_time -
                        ((time.time() - before) % self.sleep_time))
 
-    '''
     def send_predictions(self, data):
         """Send cloud prediction output to database"""
         post = {
@@ -231,7 +215,6 @@ class CloudTrackingRunner(Thread):
         posts = self.db.cloudPredictionData
         post_id = posts.insert_one(post).inserted_id
         print("post_id: " + str(post_id))
-    '''
 
     def send_coverage(self, coverage):
         """Sends percent cloud coverage to database"""

@@ -62,7 +62,7 @@ def draw_arrows(frame, flow, step=ARROW_STEP):
             x_f.append((x2, y2))
 
     #cv2.polylines(frame, nonzero_lines, False, (0, 255, 0, 255))
-
+    cv2.imwrite('cloud_optical_flow.png', frame)
     return frame, x_i, x_f
 
 
@@ -71,6 +71,7 @@ def calculate_opt_dense(frame1, frame2):
     # Convert the images to Grayscale
     prev = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
     next = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
-
+    cv2.imshow("greyed out", prev)
+    cv2.waitKey(0)
     # Calculate the optical flow
     return cv2.calcOpticalFlowFarneback(prev, next, None, pyr_scale, levels, winsize, iterations, poly_n, poly_sigma, flags)

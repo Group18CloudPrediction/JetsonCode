@@ -1,10 +1,12 @@
-import numpy as np
-from pysolar.solar import get_azimuth, get_altitude
-from _datetime import datetime
-import tzlocal
-import cv2
-from matplotlib import pyplot as plt
 import os
+
+import cv2
+import numpy as np
+import tzlocal
+from _datetime import datetime
+from matplotlib import pyplot as plt
+from pysolar.solar import get_altitude, get_azimuth
+from scipy import signal
 
 
 # also ignore leap second warnings
@@ -16,10 +18,37 @@ def get_sun(lat, long, date):
     return azimuth, altitude
 
 
-def mask_sun(lat, long):
+def mask_sun_pixel(img, SUN_THRESHOLD=2.9375, FILTER_SIZE=25):
+    # Locate the brightest pixel in the image (i.e. the sun) and cover it up so it doesn't
+    # mess with our coverage code
+    img = np.asarray(img).astype(np.double)
+    img /= 255
+
+    intensity = img[:, :, 0] + img[:, :, 1] + img[:, :, 2]
+
+    # To eliminate noise and find the center of the sun, we're going to do a mean convolution
+    mean_matrix = np.full(shape=(FILTER_SIZE, FILTER_SIZE),
+                          fill_value=1/FILTER_SIZE**2)
+    convolved_intensity = signal.convolve2d(
+        intensity, mean_matrix, mode='full', boundary='fill', fillvalue=0)
+
+    # locate the brightest pixel in the image (aka the pixel with the highest intensity value)
+    max_intensity = np.amax(convolved_intensity)
+
+    # If the sun is in the image, the max_intensity should be greater than this threshold
+    # If it's not, the that means that the sun is probably covered by a cloud (or not in frame)
+    if max_intensity >= SUN_THRESHOLD:
+        brightest = np.where(convolved_intensity == max_intensity)
+        l = int(len(brightest[0]) / 2)
+        return (brightest[1][l], brightest[0][l])
+
+    return (None, None)
+
+
+def mask_sun_pysolar(lat, long):
     """Returns point at center of sun and pixel mask for sun."""
-    date = tzlocal.get_localzone().localize(datetime.now())
-    # date = datetime(2019, 11, 24, 13, 17, 00, tzinfo=tzlocal.get_localzone())
+    # date = tzlocal.get_localzone().localize(datetime.now())
+    date = datetime(2019, 10, 19, 15, 42, 00, tzinfo=tzlocal.get_localzone())
     # frame = cv2.resize(frame1, (640, 480))
 
     # 2.) Find sun using (azimuth, altitude)
