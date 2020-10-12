@@ -2,7 +2,7 @@
 
 import pymongo
 import config.creds as creds
-import pickle
+import jsonpickle
 
 class VerifiedData:
 	def __init__(self, dt, perc, pv, av):
@@ -19,12 +19,13 @@ db_response = db.PowerVerificationData.find().sort([('_id', -1)]).limit(1)
 for doc in db_response:
 	print(doc)
 	author = doc['author']
-	preds_list = pickle.loads(doc['verified_power_data'])
+	preds_list = jsonpickle.decode(doc['verified_power_data'])
 	time = doc["verified_time"]
 	system = doc['system_num']
 	
 	for pred in preds_list:
-		print(pred.verified_time)
-		print(pred.percentage)
-		print(pred.predicted_value)
-		print(pred.actual_value)
+		print(pred)
+		print(pred['percentage'])
+		print(pred['verified_time'])
+		print(pred['predicted_value'])
+		print(pred['actual_value'])

@@ -2,7 +2,7 @@ import minimalmodbus as mmbus
 import serial
 import time
 import pymongo
-import pickle
+import jsonpickle
 import config.creds as creds
 import config.substation_info as substation
 import power_prediction.Predict as Predict
@@ -162,9 +162,9 @@ class PowerPredictionRunner(Thread):
 
 	def send_verification_data_to_db(self, vd):
 		print("sending verification info to db")
-		dump = pickle.dumps(vd)
+		vd_json = jsonpickle.encode(vd, make_refs=False)
 		post = {"author": "power_prediction.py",
-				"verified_power_data": dump,
+				"verified_power_data": vd_json,
 				"verified_time": vd[0].verified_time, # just use the time of the first object in list
 				"system_num": substation.id}
 		
@@ -259,7 +259,7 @@ class Get_Data_On_Startup(Thread):
 		print("post_id: " + str(post_id))
 		
 def main():
-	dbg = False
+	dbg = True
 	if dbg:
 		global weather_data_list
 		weather_data_list =[[0.0, 261.70001220703125, 0.15000000596046448, 24.799999237060547, 9, 28, 21, 53],
