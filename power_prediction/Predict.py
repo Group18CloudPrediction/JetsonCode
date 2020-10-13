@@ -21,8 +21,8 @@ num_steps   = 3 # How many timesteps to consider at once
 # or make that an argument for the webapp to control
 
 # Remember to save favorite model
-model_file  = 'power_prediction/models/Power_Pred_model_2020_09_20_17_20.json'
-weight_file = 'power_prediction/weights/Power_Pred_weights_2020_09_20_17_20.h5'
+model_file  = 'power_prediction/models/Power_Pred_model_2020_10_08_12_10.json'
+weight_file = 'power_prediction/weights/Power_Pred_weights_2020_10_08_12_10.h5'
 
 # LOAD FROM DISK
 json_file = open(model_file, 'r')
