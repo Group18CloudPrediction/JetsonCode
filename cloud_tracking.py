@@ -2,7 +2,7 @@ import subprocess as sp
 import time
 from multiprocessing import Process, Queue
 from threading import Event, Thread
-
+import socketio
 import cv2
 import numpy as np
 import pymongo
@@ -35,6 +35,18 @@ send_images = True
 do_coverage = True
 do_mask = True
 do_crop = True
+
+
+# Initialize socket io
+def initialize_socketio(url):
+    sio = socketio.Client()
+
+    @sio.event
+    def connect():
+        print("Connected to Application Server")
+
+    sio.connect(url)
+    return sio
 
 
 def create_ffmpeg_pipe():
@@ -168,6 +180,8 @@ class CloudTrackingRunner(Thread):
                 # throw away the data in the pipe's buffer.
                 self.pipe.stdout.flush()
 
+                send_image_to_db(prev)
+
                 time.sleep(10)
 
                 # grab next frame from pipe
@@ -191,12 +205,14 @@ class CloudTrackingRunner(Thread):
                     prediction_frequencies = self.prediction_queue.get()
                     print("Sending predictions", np.shape(
                         prediction_frequencies))
-                    self.send_predictions(prediction_frequencies)
+                    self.send_predictions_to_db(prediction_frequencies)
 
-                # Send cloud coverage data, cloud image, and shadow image to MongoDB
+                # Send cloud image, and shadow image via socketIO to website
                 self.send_cloud(flow)
                 self.send_shadow(cloudPNG)
-                self.send_coverage(cloudPNG)
+
+                # Send cloud coverage data to MongoDB
+                self.send_coverage_to_db(cloudPNG)
 
             except Exception as inst:
                 print(inst)
@@ -205,7 +221,25 @@ class CloudTrackingRunner(Thread):
             time.sleep(self.sleep_time -
                        ((time.time() - before) % self.sleep_time))
 
-    def send_predictions(self, data):
+    def send_image_to_db(self, frame):
+        """Send image to database"""
+        success, im_buffer = cv2.imencode('.png', frame)
+
+        if success is False:
+            print("couldnt encode png image")
+            return
+
+        byte_image = im_buffer.tobytes()
+        post = {
+            "author": "cloud_tracking.py",
+            "cameraFrame": byte_image
+        }
+
+        posts = self.db.cloudImage
+        post_id = posts.insert_one(post).inserted_id
+        print("post_id: " + str(post_id))
+
+    def send_predictions_to_db(self, data):
         """Send cloud prediction output to database"""
         post = {
             "author": "cloud_tracking.py",
@@ -216,7 +250,7 @@ class CloudTrackingRunner(Thread):
         post_id = posts.insert_one(post).inserted_id
         print("post_id: " + str(post_id))
 
-    def send_coverage(self, coverage):
+    def send_coverage_to_db(self, coverage):
         """Sends percent cloud coverage to database"""
         cloud = np.count_nonzero(coverage[:, :, 3] > 0)
         not_cloud = np.count_nonzero(coverage[:, :, 3] == 0)
@@ -234,43 +268,29 @@ class CloudTrackingRunner(Thread):
         post_id = posts.insert_one(post).inserted_id
         print("post_id: " + str(post_id))
 
-    def send_cloud(self, frame):
-        """Sends cloud image to database"""
-        success, im_buffer = cv2.imencode('.png', frame)
+    def send_image(self, image, event_name):
+        if send_images is False or sock is None:
+            return
+        success, im_buffer = cv2.imencode('.png', image)
 
         if success is False:
             print("couldnt encode png image")
             return
 
         byte_image = im_buffer.tobytes()
-        post = {
-            "author": "cloud_tracking.py",
-            "coverage": byte_image
-        }
+        sock.emit(event_name, byte_image)
 
-        posts = self.db.cloudImage
-        post_id = posts.insert_one(post).inserted_id
-        print("post_id: " + str(post_id))
+    def send_cloud(self, frame):
+        """Sends cloud image to website via socketIO"""
+        send_image(frame, 'coverage')
 
     def send_shadow(self, coverage):
-        """Sends shadow image to database"""
+        """Sends shadow image to website via socketIO"""
         shadow = coverage.copy()
+        # TURN SHADOW TO BLACK AND WHITE
+        cv2.cvtColor(shadow, cv2.COLOR_BGR2GRAY)
         shadow[(shadow[:, :, 3] > 0)] = (0, 0, 0, 127)
-        success, im_buffer = cv2.imencode('.png', shadow)
-
-        if success is False:
-            print("couldnt encode png image")
-            return
-
-        byte_image = im_buffer.tobytes()
-        post = {
-            "author": "cloud_tracking.py",
-            "shadow": byte_image
-        }
-
-        posts = self.db.shadowImage
-        post_id = posts.insert_one(post).inserted_id
-        print("post_id: " + str(post_id))
+        send_image(shadow, 'shadow')
 
 
 def main():
