@@ -2,8 +2,10 @@ import time
 from datetime import datetime
 from threading import Thread, Event
 import pymongo
-import credentials.creds as creds
+import config.creds as creds
+import config.substation_info as substation
 from datalogger.datalogger import Datalogger
+from datalogger.cloud_height_data import CloudHeightData
 
 class DataloggerThread(Thread):
 	def __init__(self):
@@ -33,13 +35,15 @@ class DataloggerThread(Thread):
 			starttime = time.time()
 			self.the_date = datetime.utcnow()
 			self.datalogger.poll() # get the current weather data
+			height = self.calculate_cloud_height()
 			self.send_weather_data_to_db()
+			self.send_cloud_height_data_to_db(height)
 			time.sleep(self.sleep_time - ((time.time() - starttime) % self.sleep_time))
 
 	def send_weather_data_to_db(self):
 		print("sendind data to db")
 		the_date = self.the_date
-		post = {"author": "datalogger",
+		post = {"author": "datalogger_runner.py",
 				"slrFD_W": self.datalogger.weather_data.slrFD_W,
 				"rain_mm": self.datalogger.weather_data.rain_mm,
 				"strikes": self.datalogger.weather_data.strikes,
@@ -57,11 +61,36 @@ class DataloggerThread(Thread):
 				"tags": ["weather_data", "datalogger", "weather", "weather_station", "verified_data"],
 				"date": self.the_date,
 				"date_mins_only": the_date.replace(second=0, microsecond=0),
-				"system_num": "PLACEHOLDER_REPLACE"}
+				"system_num": substation.id}
 		
 		posts = self.db.WeatherData
 		post_id = posts.insert_one(post).inserted_id
 		print("post_id: " + str(post_id))
+
+	def send_cloud_height_data_to_db(self, c_height):
+		print("sendind cloud data to db")
+		the_date = self.the_date
+		post = {"author": "datalogger_runner.py",
+			"temperature": c_height.temperature,
+			"humidity": c_height.humidity,
+			"dew_point": c_height.dew_point,
+			"cloud_height": c_height.cloud_height,
+			"calc_time": c_height.calc_time,
+			"calc_time_mins_only": c_height.calc_time_mins_only,
+			"tags": ["cloud_data", "datalogger", "weather", "weather_station"],
+			"date": self.the_date,
+			"date_mins_only": the_date.replace(second=0, microsecond=0),
+			"system_num": substation.id}
+		
+		posts = self.db.CloudHeightData
+		post_id = posts.insert_one(post).inserted_id
+		print("post_id: " + str(post_id))
+
+
+	def calculate_cloud_height(self):
+		c_height = CloudHeightData(self.datalogger.weather_data.airT_C, self.datalogger.weather_data.rh)
+
+		return c_height
 
 def main():
 	datalogger_runner = DataloggerThread()
@@ -69,4 +98,3 @@ def main():
 		
 if __name__ == "__main__":
 	main()
-
