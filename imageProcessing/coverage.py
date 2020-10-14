@@ -42,6 +42,5 @@ def cloud_recognition(img):
 
     output *= 255
 
-    # cv2.imwrite('cloud_pred.png', output)
     # Return the image in the same format, in which it was inputted
     return output

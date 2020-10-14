@@ -7,7 +7,6 @@ import cv2
 import numpy as np
 import pymongo
 
-import forecast
 from credentials import creds
 from imageProcessing import fisheye_mask as fisheye
 from imageProcessing.coverage import cloud_recognition
@@ -25,7 +24,6 @@ URL_APP_SERVER = 'https://cloudtracking-v2.herokuapp.com/'
 
 # CONSTANTS
 DISPLAY_SIZE = (512, 384)
-SECONDS_PER_FRAME = 30
 SUN_RADIUS = 50
 LAT = 28.601722
 LONG = -81.198545
@@ -83,7 +81,6 @@ def create_ffmpeg_pipe():
 
 def experiment_step(prev, next):
     """Perform image processing + optical flow on the two inputted frames"""
-    before = current_milli_time()
     clouds = None
     sun_center = None
     sun_pixels = None
@@ -106,8 +103,6 @@ def experiment_step(prev, next):
 
     cv2.circle(prev, sun_center, SUN_RADIUS, (255, 0, 0), -1)
     cv2.circle(next, sun_center, SUN_RADIUS, (255, 0, 0), -1)
-    # cv2.imshow('sun masked', next)
-    # cv2.waitKey(0)
 
     # Convert pixel opacity values to not cloud (0) or cloud (1) -> based on pixel saturation
     clouds = cloud_recognition(next)
@@ -116,42 +111,10 @@ def experiment_step(prev, next):
     flow_vectors = opticalDense.calculate_opt_dense(prev, next)
 
     # Draw vector field based on cloud/not cloud image and displacement vectors
-    flow, x_i, x_f = opticalDense.draw_arrows(clouds.copy(), flow_vectors, 10)
-
-    after = current_milli_time()
-    # print('Experiment step took: %s ms' % (after - before))
+    flow, __, __ = opticalDense.draw_arrows(clouds.copy(), flow_vectors, 10)
 
     # Return experiment step
-    return (clouds, flow, x_i, x_f, sun_pixels)
-
-
-def experiment_display(prev, next, flow, coverage):
-    """Display results of experiment step with cv.imshow"""
-    if display_images is False:
-        return
-    # Resize the images for visibility
-    flow_show = cv2.resize(flow, DISPLAY_SIZE)
-    prev_show = cv2.resize(prev, DISPLAY_SIZE)
-    next_show = cv2.resize(next, DISPLAY_SIZE)
-
-    # Show the images
-    cv2.imshow('flow?', flow_show)
-    cv2.imshow('previous', prev_show)
-    cv2.imshow('next', next_show)
-
-    # Wait 30s for ESC and return false if pressed
-    k = cv2.waitKey(30) & 0xff
-    if (k == 27):
-        return False
-    return True
-
-
-def forecast_(x_i, x_f, sun_pixels):
-    """Predicts solar occlusion based on solar position + cloud motion vectors"""
-    times = forecast.get_time(
-        x_i, x_f, sun_pixels, SUN_RADIUS, SECONDS_PER_FRAME)
-
-    return times
+    return clouds, flow
 
 
 def byteRead_to_npArray(rawimg):
@@ -176,7 +139,7 @@ class CloudTrackingRunner(Thread):
         self.pipe = create_ffmpeg_pipe()
 
         # initialize socket
-        self.sock = None
+        self.sock = initialize_socketio(URL_APP_SERVER)
 
     def run(self):
         while True:
@@ -199,21 +162,15 @@ class CloudTrackingRunner(Thread):
                 prev = byteRead_to_npArray(prev_rawimg)
                 next = byteRead_to_npArray(next_rawimg)
 
-                (cloudPNG, flow, x_i, x_f,
-                 sun_pixels) = experiment_step(prev, next)
-
-                # occlusion_prediction = forecast_(x_i, x_f, sun_pixels)
+                cloudPNG, flow = experiment_step(prev, next)
 
                 # Send cloud image, and shadow image via socketIO to website
-                # self.send_cloud(flow)
-                # self.send_shadow(cloudPNG)
+                self.send_cloud_socket(flow)
+                self.send_shadow_socket(cloudPNG)
 
                 # Send cloud coverage data to MongoDB
                 self.send_image_to_db(prev)
                 self.send_coverage_to_db(cloudPNG)
-
-                # print("Sending predictions", np.shape(occlusion_prediction))
-                # self.send_predictions_to_db(occlusion_prediction)
 
                 finishTime = current_milli_time()
 
@@ -240,18 +197,6 @@ class CloudTrackingRunner(Thread):
         post_id = posts.insert_one(post).inserted_id
         print("img_post_id: " + str(post_id))
 
-    def send_predictions_to_db(self, data):
-        """Send solar occlusion predictions to database"""
-        print(data)
-        post = {
-            "author": "cloud_tracking.py",
-            "cloud_prediction": data
-        }
-
-        posts = self.db.cloudPredictionData
-        post_id = posts.insert_one(post).inserted_id
-        print("pred_post_id: " + str(post_id))
-
     def send_coverage_to_db(self, coverage):
         """Sends percent cloud coverage to database"""
         cloud = np.count_nonzero(coverage[:, :, 3] > 0)
@@ -268,7 +213,7 @@ class CloudTrackingRunner(Thread):
         post_id = posts.insert_one(post).inserted_id
         print("cover_post_id: " + str(post_id))
 
-    def send_image(self, image, event_name):
+    def send_image_socket(self, image, event_name):
         """Emits an image through socketIO connection"""
         if send_images is False or sock is None:
             return
@@ -281,17 +226,18 @@ class CloudTrackingRunner(Thread):
         byte_image = im_buffer.tobytes()
         sock.emit(event_name, byte_image)
 
-    def send_cloud(self, frame):
+    def send_cloud_socket(self, frame):
         """Sends cloud image to website via socketIO"""
-        self.send_image(frame, 'coverage')
+        self.send_image_socket(frame, 'coverage')
 
-    def send_shadow(self, coverage):
+    def send_shadow_socket(self, coverage):
         """Sends shadow image to website via socketIO"""
         shadow = coverage.copy()
+
         # TURN SHADOW TO BLACK AND WHITE
         cv2.cvtColor(shadow, cv2.COLOR_BGR2GRAY)
         shadow[(shadow[:, :, 3] > 0)] = (0, 0, 0, 127)
-        send_image(shadow, 'shadow')
+        send_image_socket(shadow, 'shadow')
 
 
 def main():

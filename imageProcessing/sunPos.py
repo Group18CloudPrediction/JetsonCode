@@ -22,6 +22,7 @@ def draw_sun_circle(sun_radius, sun_center, img):
     """Draws circle on img, centered on sun_center (x, y), with radius sun_radius"""
     # draw red circle around the center point
     cv2.circle(img, sun_center, sun_radius, (0, 0, 255), -1, 8, 0)
+
     # identify all red pixels and extract their coordinates
     points = np.where((img == [0, 0, 255]).all(axis=2))
 
@@ -52,6 +53,7 @@ def mask_sun_pixel(img, sun_radius, SUN_THRESHOLD=2.9375, FILTER_SIZE=25):
     if max_intensity >= SUN_THRESHOLD:
         brightest = np.where(convolved_intensity == max_intensity)
         l = int(len(brightest[0]) / 2)
+
         sun_center = (brightest[1][l], brightest[0][l])
         sun_pixels = draw_sun_circle(sun_radius, sun_center, img)
 
