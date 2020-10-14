@@ -71,7 +71,7 @@ def calculate_opt_dense(frame1, frame2):
     # Convert the images to Grayscale
     prev = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
     next = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
-    cv2.imshow("greyed out", prev)
-    cv2.waitKey(0)
+    # cv2.imshow("greyed out", prev)
+    # cv2.waitKey(0)
     # Calculate the optical flow
     return cv2.calcOpticalFlowFarneback(prev, next, None, pyr_scale, levels, winsize, iterations, poly_n, poly_sigma, flags)

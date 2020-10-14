@@ -16,8 +16,8 @@ def create_fisheye_mask(prev, next, mask_radius=3):
 
     maskedNext = np.zeros_like(next)
     maskedNext[mask > 0] = next[mask > 0]
-    cv2.imshow("fisheye masked", maskedPrev)
-    cv2.waitKey(0)
+    # cv2.imshow("fisheye masked", maskedPrev)
+    # cv2.waitKey(0)
     return maskedPrev, maskedNext
 
 
@@ -34,8 +34,8 @@ def image_crop(img, mask_radius_ratio=3.5):
     right_edge = int(w/2 + s)
 
     croppedImg = img[left_edge:right_edge,  top_edge:bottom_edge, :]
-    cv2.imshow("Cropped image", croppedImg)
-    cv2.waitKey(0)
+    # cv2.imshow("Cropped image", croppedImg)
+    # cv2.waitKey(0)
     return croppedImg
 
 

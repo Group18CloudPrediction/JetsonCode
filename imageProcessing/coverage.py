@@ -2,7 +2,6 @@ import numpy as np
 import cv2
 
 # A few constants that are used in this program
-SUN_RADIUS = 50   # Used to block the sun
 SAT_THRESHOLD = 0.08  # Used for cloud detection
 
 
@@ -25,19 +24,12 @@ def _calc_sat(r, g, b):
 v_sat = np.vectorize(_calc_sat)
 
 
-def cloud_recognition(img, sun_center):
+def cloud_recognition(img):
     """Converts all pixel RGBs in an image to 0 (not cloud) or 255 (cloud)"""
     # OpenCV opens images as GBR. We need to change it to RGB, convert it to a numpy array
     # and then normalize all the values
     img = np.asarray(img).astype(np.double)
     img /= 255
-
-    # Plot a blue circle at the sun_center point with radius defined in constants
-    if not all(sun_center) is False:
-        cv2.circle(img, sun_center,
-                   SUN_RADIUS, (255, 0, 0), -1)
-        cv2.imshow("sun Masked", img)
-        cv2.waitKey(0)
 
     # Use the vectorized functions above and apply to every element of the matrix
     sat = v_sat(img[:, :, 2], img[:, :, 1], img[:, :, 0])
@@ -50,6 +42,6 @@ def cloud_recognition(img, sun_center):
 
     output *= 255
 
-    cv2.imwrite('cloud_pred.png', output)
+    # cv2.imwrite('cloud_pred.png', output)
     # Return the image in the same format, in which it was inputted
     return output

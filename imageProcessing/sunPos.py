@@ -18,7 +18,19 @@ def get_sun(lat, long, date):
     return azimuth, altitude
 
 
-def mask_sun_pixel(img, SUN_THRESHOLD=2.9375, FILTER_SIZE=25):
+def draw_sun_circle(sun_radius, sun_center, img):
+    """Draws circle on img, centered on sun_center (x, y), with radius sun_radius"""
+    # draw red circle around the center point
+    cv2.circle(img, sun_center, sun_radius, (0, 0, 255), -1, 8, 0)
+    # identify all red pixels and extract their coordinates
+    points = np.where((img == [0, 0, 255]).all(axis=2))
+
+    sun_pixels = list(zip(points[1][:], points[0][:]))
+
+    return sun_pixels
+
+
+def mask_sun_pixel(img, sun_radius, SUN_THRESHOLD=2.9375, FILTER_SIZE=25):
     # Locate the brightest pixel in the image (i.e. the sun) and cover it up so it doesn't
     # mess with our coverage code
     img = np.asarray(img).astype(np.double)
@@ -40,12 +52,15 @@ def mask_sun_pixel(img, SUN_THRESHOLD=2.9375, FILTER_SIZE=25):
     if max_intensity >= SUN_THRESHOLD:
         brightest = np.where(convolved_intensity == max_intensity)
         l = int(len(brightest[0]) / 2)
-        return (brightest[1][l], brightest[0][l])
+        sun_center = (brightest[1][l], brightest[0][l])
+        sun_pixels = draw_sun_circle(sun_radius, sun_center, img)
 
-    return (None, None)
+        return sun_center, sun_pixels
+
+    return (None, None), None
 
 
-def mask_sun_pysolar(lat, long):
+def mask_sun_pysolar(lat, long, sun_radius):
     """Returns point at center of sun and pixel mask for sun."""
     # date = tzlocal.get_localzone().localize(datetime.now())
     date = datetime(2019, 10, 19, 15, 42, 00, tzinfo=tzlocal.get_localzone())
@@ -54,6 +69,7 @@ def mask_sun_pysolar(lat, long):
     # 2.) Find sun using (azimuth, altitude)
     azimuth, altitude = get_sun(lat, long, date)
     # print(azimuth, altitude)
+
     # *************** Creating the polar grid ****************
     # To convert degrees to radian for plotting
     rad = np.pi / 180
@@ -67,34 +83,26 @@ def mask_sun_pysolar(lat, long):
     ax1.set_yticks(np.arange(0, 90, 10))
     yLabel = ['90', '', '', '60', '', '', '30', '', '']
     ax1.set_yticklabels(yLabel)
+
     # *************** PLOTTING DIRECTLY ONTO POLAR GRID WITH AZIMUTH, ALTITUDE input ***************
     # original: single center point
     plt.polar((azimuth)*rad, 90-altitude, 'ro', markersize=1)
     plt.savefig('sunPos.png')
 
-    # 3.) Mask the sun in the image, store the masked area as 'sunPixels'
     # load sunPos image to create mask
     sun_image = cv2.imread('sunPos.png')
+    # mask = np.zeros_like(sun_image)
+    # mask[np.where((sun_image == [0, 0, 255]).all(axis=2))] = [0, 0, 255]
 
-    mask = np.zeros_like(sun_image)
-    mask[np.where((sun_image == [0, 0, 255]).all(axis=2))] = [0, 0, 255]
-
-    # Store the plotted center point
-    point = np.where((mask == [0, 0, 255]).all(axis=2))
-
-    # TODO: check if the sun is not out return
-    # return None, None
+    point = np.where((sun_image == [0, 0, 255]).all(axis=2))
 
     sun_center = (point[1][0], point[0][0])
 
-    # draw circle with radius=18 around the center point
-    cv2.circle(mask, sun_center, 18, (0, 0, 255), -1, 8, 0)
+    # Mask the sun in the image, store the masked area as 'sunPixels'
+    sun_pixels = draw_sun_circle()
 
-    points = np.where((mask == [0, 0, 255]).all(axis=2))
-    sun_pixels = list(zip(points[1][:], points[0][:]))
+    # TODO: check if the sun is not out then:
+    # return None, None
 
-    # clean up after ourselves
-    # os.remove('sunPos.png')
-
-    # 4.) Send 'sun_center' to motion estimation and coverage
+    # return 'sun_center' to motion estimation and coverage
     return sun_center, sun_pixels

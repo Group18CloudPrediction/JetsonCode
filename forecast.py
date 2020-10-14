@@ -6,31 +6,46 @@ from opticalFlow import opticalDense
 # return predicted times unil sun occlusion
 
 
-def get_time(x_i, x_f, sun_pixels, sun_radius, fps):
-    # 1.) Calculate speed (pixels/sec.)
-    # 2.) Calculate distance from pixel to sun
+def get_time(x_i, x_f, sun_pixels, sun_radius, time_between_frames):
+    np.set_printoptions(precision=3)
+    print(x_i.shape)
+    print(x_f.shape)
+
+    # for every pixel of sun check if cloud pixel is overlapping
+
+    # create numpy of all pixels where sun pixel pos = cloud pixel pos
+
+    # (if overlap > 80% of sun pixels size return TRUE)
+    # (else add FALSE to times)
+
     times = []
-    for i in range(len(x_i)):
-        dist1 = euclid(x_i[i], x_f[i])
-        speed = dist1 * fps
+    for minute in range(15):
 
-        temp = []
-        for j in range(len(sun_pixels)):
-            temp.append(euclid(x_f[i], sun_pixels[j], sun_radius))
-        dist2 = min(temp)
+        for i in range(len(x_i)):
+            dist1 = euclid(x_i[i], x_f[i])
+            speed = dist1 / time_between_frames
 
-        ab = np.subtract(x_f[i], x_i[i])
-        # change sun_center to the selected min sun pixel ****
-        # bc = np.subtract(sun_center, x_f[i])
-        bc = np.subtract(sun_pixels[temp.index(dist2)], x_f[i])
-        ang = get_angle(ab, bc, dist1, dist2)
+            # calc new pos of pixel dependent on vector
+            x_new = x_i[i] * speed
 
-        # Note: if time is neg., occlusion is happening currently ***********
-        if(ang == 0):
-            # print(x_i[i], x_f[i])
-            t = dist2 / (speed * 60)
-            # print("time:", round(t) , "minutes")
-            times.append(t)
+            dist2 = -sun_radius
+            for j in range(len(sun_pixels)):
+                temp = euclid(x_f[i], sun_pixels[j], sun_radius)
+                dist2 = temp if temp > dist2 else dist2
+
+            ab = np.subtract(x_f[i], x_i[i])
+
+            # change sun_center to the selected min sun pixel ****
+            # bc = np.subtract(sun_center, x_f[i])
+            bc = np.subtract(sun_pixels[temp.index(dist2)], x_f[i])
+            ang = get_angle(ab, bc, dist1, dist2)
+
+            # Note: if time is neg., occlusion is happening currently ***********
+            if(ang == 0):
+                # print(x_i[i], x_f[i])
+                t = dist2 / (speed * 60)
+                # print("time:", round(t) , "minutes")
+                times.append(t)
     # exit(0)
     return times
 
