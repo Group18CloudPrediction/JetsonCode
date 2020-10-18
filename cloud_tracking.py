@@ -199,7 +199,7 @@ class CloudTrackingRunner(Thread):
 
         posts = self.db.cloudImage
         post_id = posts.insert_one(post).inserted_id
-        print("img_post_id: " + str(post_id))
+        print("DB sent -> img_post_id: " + str(post_id))
 
     def send_coverage_to_db(self, coverage):
         """Sends percent cloud coverage to database"""
@@ -215,7 +215,7 @@ class CloudTrackingRunner(Thread):
 
         posts = self.db.cloudCoverageData
         post_id = posts.insert_one(post).inserted_id
-        print("cover_post_id: " + str(post_id))
+        print("DB sent -> cover_post_id: " + str(post_id))
 
     def send_image_socket(self, image, event_name):
         """Emits an image through socketIO connection"""
@@ -226,7 +226,8 @@ class CloudTrackingRunner(Thread):
             return
 
         byte_image = im_buffer.tobytes()
-        sock.emit(event_name, byte_image)
+        self.sock.emit(event_name, byte_image)
+        print("sock -> emit: ", event_name)
 
     def send_cloud_socket(self, frame):
         """Sends cloud image to website via socketIO"""
@@ -239,7 +240,7 @@ class CloudTrackingRunner(Thread):
         # TURN SHADOW TO BLACK AND WHITE
         cv2.cvtColor(shadow, cv2.COLOR_BGR2GRAY)
         shadow[(shadow[:, :, 3] > 0)] = (0, 0, 0, 127)
-        send_image_socket(shadow, 'shadow')
+        self.send_image_socket(shadow, 'shadow')
 
 
 def main():
