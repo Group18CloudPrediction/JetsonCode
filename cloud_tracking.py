@@ -30,9 +30,8 @@ LONG = -81.198545
 
 # FLAGS
 livestream_online = False
-display_images = True
-send_images = True
-do_coverage = True
+send_to_db = True
+socket_on = True
 do_mask = True
 do_crop = True
 
@@ -139,7 +138,10 @@ class CloudTrackingRunner(Thread):
         self.pipe = create_ffmpeg_pipe()
 
         # initialize socket
-        self.sock = initialize_socketio(URL_APP_SERVER)
+        if socket_on is True:
+            self.sock = initialize_socketio(URL_APP_SERVER)
+        else:
+            self.sock = None
 
     def run(self):
         while True:
@@ -165,12 +167,14 @@ class CloudTrackingRunner(Thread):
                 cloudPNG, flow = experiment_step(prev, next)
 
                 # Send cloud image, and shadow image via socketIO to website
-                self.send_cloud_socket(flow)
-                self.send_shadow_socket(cloudPNG)
+                if socket_on is True:
+                    self.send_cloud_socket(flow)
+                    self.send_shadow_socket(cloudPNG)
 
                 # Send cloud coverage data to MongoDB
-                self.send_image_to_db(prev)
-                self.send_coverage_to_db(cloudPNG)
+                if send_to_db is True:
+                    self.send_image_to_db(prev)
+                    self.send_coverage_to_db(cloudPNG)
 
                 finishTime = current_milli_time()
 
@@ -182,7 +186,7 @@ class CloudTrackingRunner(Thread):
     def send_image_to_db(self, frame):
         """Send inputted image as png byte array to database"""
         success, im_buffer = cv2.imencode('.png', frame)
-
+        cv2.imwrite('cloudImage.png', frame)
         if success is False:
             print("couldnt encode png image")
             return
@@ -215,8 +219,6 @@ class CloudTrackingRunner(Thread):
 
     def send_image_socket(self, image, event_name):
         """Emits an image through socketIO connection"""
-        if send_images is False or sock is None:
-            return
         success, im_buffer = cv2.imencode('.png', image)
 
         if success is False:

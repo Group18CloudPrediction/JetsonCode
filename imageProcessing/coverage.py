@@ -6,7 +6,7 @@ SAT_THRESHOLD = 0.08  # Used for cloud detection
 
 
 def _calc_sat(r, g, b):
-    """Formula for caluclating saturation"""
+    """Formula for calculating saturation"""
     # np.seterr('raise')
     try:
         if (r < g < b):
