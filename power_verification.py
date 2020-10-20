@@ -150,13 +150,12 @@ class PowerPredictionRunner(Thread):
 				"rht_c": self.datalogger.weather_data.rht_c,
 				"tiltNS_deg": self.datalogger.weather_data.tiltNS_deg,
 				"tiltWE_deg": self.datalogger.weather_data.tiltWE_deg,
-				"tags": ["weather_data", "datalogger", "weather", "weather_station", "verified_data"],
 				"date": self.the_date,
 				"date_mins_only": the_date.replace(second=0, microsecond=0),
 				"date_time_only": the_date.replace(year=1970, month=1, day=1),
 				"system_num": substation.id}
 		
-		posts = self.db.WeatherData
+		posts = self.db.WeatherData_PowerPrediction
 		post_id = posts.insert_one(post).inserted_id
 		print("post_id: " + str(post_id))
 
@@ -206,7 +205,7 @@ class Get_Data_On_Startup(Thread):
 		#weather_data_list.clear()
 		self.finished_getting_data_event = finished_getting_data_event
 		self.run_num = 1
-		self.client = pymongo.MongoClient("mongodb+srv://" + creds.username + ":" + creds.password + "@cluster0.lgezy.mongodb.net/<dbname>?retryWrites=true&w=majority")
+		self.client = pymongo.MongoClient(creds.base_url + creds.username + creds.separator + creds.password + creds.cluster_url)
 		self.db = self.client.cloudTrackingData
 		self.datalogger = Datalogger('/dev/ttyS5') #path will need to change per system
 		self.sleep_time = 60 #60 seconds
@@ -248,7 +247,6 @@ class Get_Data_On_Startup(Thread):
 				"rht_c": self.datalogger.weather_data.rht_c,
 				"tiltNS_deg": self.datalogger.weather_data.tiltNS_deg,
 				"tiltWE_deg": self.datalogger.weather_data.tiltWE_deg,
-				"tags": ["weather_data", "datalogger", "weather", "weather_station", "verified_data"],
 				"date": self.the_date,
 				"date_mins_only": the_date.replace(second=0, microsecond=0),
 				"date_time_only": the_date.replace(year=1970, month=1, day=1),

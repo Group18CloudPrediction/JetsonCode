@@ -14,7 +14,7 @@ class DataloggerThread(Thread):
 		print("setup db here")
 
 		#creds will need to be created on each system
-		self.client = pymongo.MongoClient("mongodb+srv://" + creds.username + ":" + creds.password + "@cluster0.lgezy.mongodb.net/<dbname>?retryWrites=true&w=majority")
+		self.client = pymongo.MongoClient(creds.base_url + creds.username + creds.separator + creds.password + creds.cluster_url)
 		self.db = self.client.cloudTrackingData
 		datalogger_connected = False
 
@@ -36,7 +36,8 @@ class DataloggerThread(Thread):
 			self.the_date = datetime.utcnow()
 			self.datalogger.poll() # get the current weather data
 			height = self.calculate_cloud_height()
-			self.send_weather_data_to_db()
+			#NOTE: Don't really need this because power_verification is already sending to db
+			#self.send_weather_data_to_db()
 			self.send_cloud_height_data_to_db(height)
 			time.sleep(self.sleep_time - ((time.time() - starttime) % self.sleep_time))
 
@@ -58,12 +59,11 @@ class DataloggerThread(Thread):
 				"rht_c": self.datalogger.weather_data.rht_c,
 				"tiltNS_deg": self.datalogger.weather_data.tiltNS_deg,
 				"tiltWE_deg": self.datalogger.weather_data.tiltWE_deg,
-				"tags": ["weather_data", "datalogger", "weather", "weather_station", "verified_data"],
 				"date": self.the_date,
 				"date_mins_only": the_date.replace(second=0, microsecond=0),
 				"system_num": substation.id}
 		
-		posts = self.db.WeatherData
+		posts = self.db.WeatherData_Only
 		post_id = posts.insert_one(post).inserted_id
 		print("post_id: " + str(post_id))
 
@@ -77,7 +77,6 @@ class DataloggerThread(Thread):
 			"cloud_height": c_height.cloud_height,
 			"calc_time": c_height.calc_time,
 			"calc_time_mins_only": c_height.calc_time_mins_only,
-			"tags": ["cloud_data", "datalogger", "weather", "weather_station"],
 			"date": self.the_date,
 			"date_mins_only": the_date.replace(second=0, microsecond=0),
 			"system_num": substation.id}
@@ -86,11 +85,8 @@ class DataloggerThread(Thread):
 		post_id = posts.insert_one(post).inserted_id
 		print("post_id: " + str(post_id))
 
-
 	def calculate_cloud_height(self):
-		c_height = CloudHeightData(self.datalogger.weather_data.airT_C, self.datalogger.weather_data.rh)
-
-		return c_height
+		return CloudHeightData(self.datalogger.weather_data.airT_C, self.datalogger.weather_data.rh)
 
 def main():
 	datalogger_runner = DataloggerThread()
