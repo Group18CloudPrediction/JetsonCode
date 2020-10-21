@@ -8,6 +8,7 @@ import config.substation_info as substation
 import power_prediction.Predict as Predict
 import power_prediction.Train as Train
 
+from datalogger.cloud_height_data import CloudHeightData
 from datalogger.datalogger import Datalogger
 from threading import Thread, Event
 from datetime import datetime, timedelta
@@ -90,6 +91,8 @@ class PowerPredictionRunner(Thread):
 			print("predicted power")
 			print(self.predicted_power)
 			vd_list = self.run_verification() # returns error percentage and predicted power value
+			height = self.calculate_cloud_height()
+			self.send_cloud_height_data_to_db(height)
 			self.send_power_prediction_data_to_db(self.predicted_power)
 			self.send_weather_data_to_db()
 			self.send_verification_data_to_db(vd_list)
@@ -118,6 +121,24 @@ class PowerPredictionRunner(Thread):
 			weather_data_list.append(temp_list)
 			#print("temp_list len: " + str(len(temp_list)))
 			#print(temp_list)
+
+	def send_cloud_height_data_to_db(self, c_height):
+		print("sendind cloud data to db")
+		the_date = self.the_date
+		post = {"author": "power_verification.py",
+			"temperature": c_height.temperature,
+			"humidity": c_height.humidity,
+			"dew_point": c_height.dew_point,
+			"cloud_height": c_height.cloud_height,
+			"calc_time": c_height.calc_time,
+			"calc_time_mins_only": c_height.calc_time_mins_only,
+			"date": the_date,
+			"date_mins_only": the_date.replace(second=0, microsecond=0),
+			"system_num": substation.id}
+		
+		posts = self.db.CloudHeightData
+		post_id = posts.insert_one(post).inserted_id
+		print("post_id: " + str(post_id))
 
 	def send_power_prediction_data_to_db(self, predicted_power):
 		print("sending predicted power")
@@ -155,7 +176,7 @@ class PowerPredictionRunner(Thread):
 				"date_time_only": the_date.replace(year=1970, month=1, day=1),
 				"system_num": substation.id}
 		
-		posts = self.db.WeatherData_PowerPrediction
+		posts = self.db.WeatherData
 		post_id = posts.insert_one(post).inserted_id
 		print("post_id: " + str(post_id))
 
@@ -170,6 +191,9 @@ class PowerPredictionRunner(Thread):
 		posts = self.db.PowerVerificationData
 		post_id = posts.insert_one(post).inserted_id
 		print("post_id: " + str(post_id))
+
+	def calculate_cloud_height(self):
+		return CloudHeightData(self.datalogger.weather_data.airT_C, self.datalogger.weather_data.rh)
 
 	def run_verification(self):
 		print("running verification")

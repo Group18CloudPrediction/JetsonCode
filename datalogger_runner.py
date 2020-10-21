@@ -1,3 +1,7 @@
+#NOTE: This will not be used but will be left and commented
+# in case future users want a script that ONLY polls the datalogger
+# for weather data, calculates cloud height, and sends both to the db.
+
 import time
 from datetime import datetime
 from threading import Thread, Event
