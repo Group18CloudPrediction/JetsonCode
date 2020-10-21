@@ -1,2 +1,2 @@
-# cloud-tracking
-The best gosh darn senior design the world has ever seen.
+# cloud tracking jetson code
+Filled with Python Scripts and Socket.io along with the Jetson Startup Script
