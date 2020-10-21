@@ -1,12 +1,12 @@
 import subprocess as sp
 import time
-from multiprocessing import Process, Queue
-from threading import Event, Thread
+from threading import Thread
 import socketio
 import cv2
 import numpy as np
 import pymongo
 
+from config import cloud_tracking_config as ct_cfg, substation_info as substation_cfg
 from credentials import creds
 from imageProcessing import fisheye_mask as fisheye
 from imageProcessing.coverage import cloud_recognition
@@ -15,25 +15,6 @@ from opticalFlow import opticalDense
 
 
 def current_milli_time(): return int(round(time.time() * 1000))
-
-
-# VALUES
-VIDEO_PATH = 'opticalFlow/test1sec.mp4'
-# URL_APP_SERVER = 'http://localhost:3001/'
-URL_APP_SERVER = 'https://cloudtracking-v2.herokuapp.com/'
-
-# CONSTANTS
-DISPLAY_SIZE = (512, 384)
-SUN_RADIUS = 50
-LAT = 28.601722
-LONG = -81.198545
-
-# FLAGS
-livestream_online = False
-send_to_db = True
-socket_on = True
-do_mask = True
-do_crop = True
 
 
 def initialize_socketio(url):
@@ -53,7 +34,7 @@ def initialize_socketio(url):
 
 def create_ffmpeg_pipe():
     """Creates + executes command ffmpeg for video stream, and returns pipe"""
-    if livestream_online is True:
+    if ct_cfg.livestream_online is True:
         command = ['ffmpeg',
                    '-loglevel', 'panic',
                    '-nostats',
@@ -68,7 +49,7 @@ def create_ffmpeg_pipe():
         command = ['ffmpeg',
                    '-loglevel', 'panic',
                    '-nostats',
-                   '-i', VIDEO_PATH,
+                   '-i', ct_cfg.VIDEO_PATH,
                    '-s', '1024x768',
                    '-f', 'image2pipe',
                    '-pix_fmt', 'rgb24',
@@ -85,23 +66,24 @@ def experiment_step(prev, next):
     sun_pixels = None
 
     # Apply fisheye mask
-    if do_mask is True:
+    if ct_cfg.do_mask is True:
         prev, next = fisheye.create_fisheye_mask(prev, next)
 
     # crop image to square to eliminate curved lens interference
-    if do_crop is True:
+    if ct_cfg.do_crop is True:
         prev = fisheye.image_crop(prev)
         next = fisheye.image_crop(next)
 
     # Locate center of sun + pixels that are considered "sun"
-    if livestream_online is True:
-        sun_center, sun_pixels = mask_sun_pysolar(LAT, LONG, SUN_RADIUS)
+    if ct_cfg.livestream_online is True:
+        sun_center, sun_pixels = mask_sun_pysolar(
+            substation_cfg.LAT, substation_cfg.LONG, ct_cfg.SUN_RADIUS)
     else:
         # If locally stored video is being used for footage, sun must be located by pixel intensity, as time and long_lat coordinates aren't available to use pysolar
-        sun_center, sun_pixels = mask_sun_pixel(next, SUN_RADIUS)
+        sun_center, sun_pixels = mask_sun_pixel(next, ct_cfg.SUN_RADIUS)
 
-    cv2.circle(prev, sun_center, SUN_RADIUS, (255, 0, 0), -1)
-    cv2.circle(next, sun_center, SUN_RADIUS, (255, 0, 0), -1)
+    cv2.circle(prev, sun_center, ct_cfg.SUN_RADIUS, (255, 0, 0), -1)
+    cv2.circle(next, sun_center, ct_cfg.SUN_RADIUS, (255, 0, 0), -1)
 
     # Convert pixel opacity values to not cloud (0) or cloud (1) -> based on pixel saturation
     clouds = cloud_recognition(next)
@@ -138,8 +120,8 @@ class CloudTrackingRunner(Thread):
         self.pipe = create_ffmpeg_pipe()
 
         # initialize socket
-        if socket_on is True:
-            self.sock = initialize_socketio(URL_APP_SERVER)
+        if ct_cfg.socket_on is True:
+            self.sock = initialize_socketio(ct_cfg.URL_APP_SERVER)
         else:
             self.sock = None
 
@@ -167,12 +149,12 @@ class CloudTrackingRunner(Thread):
                 cloudPNG, flow = experiment_step(prev, next)
 
                 # Send cloud image, and shadow image via socketIO to website
-                if socket_on is True:
+                if ct_cfg.socket_on is True:
                     self.send_cloud_socket(flow)
                     self.send_shadow_socket(cloudPNG)
 
                 # Send cloud coverage data to MongoDB
-                if send_to_db is True:
+                if ct_cfg.send_to_db is True:
                     self.send_image_to_db(prev)
                     self.send_coverage_to_db(cloudPNG)
 

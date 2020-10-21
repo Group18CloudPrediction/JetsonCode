@@ -1,33 +1,43 @@
-import base64
-import socketio
+import subprocess
+
+import power_verification
 
 import cloud_tracking
+from config import cloud_tracking_config as ct_cfg
 
-# Constants
-URL_APP_SERVER          = 'http://localhost:3000/'
-# URL_APP_SERVER          = 'https://cloudtracking-v2.herokuapp.com/'
 
-# FLAGS -- used to test different functionalities
-sock = None
+def create_livestream():
+    if ct_cfg.livestream_online is True:
+        command = ['ffmpeg',
+                   '-rtsp_transport', 'tcp',
+                   '-i', 'rtsp://192.168.0.10:8554/CH001.sdp',
+                   '-f', 'mpegts',
+                   '-s', '1280x1200',
+                   '-codec:v', 'mpeg1video',
+                   '-b:v', '3000k',
+                   '-framerate', '30',
+                   '-r', '30',
+                   '-bf', '0',
+                   'https://cloudtracking-v2.herokuapp.com/cloudtrackinglivestream/1']
+    else:
+        command = ['ffmpeg',
+                   '-rtsp_transport', 'tcp',
+                   '-i', ct_cfg.VIDEO_PATH,
+                   '-f', 'mpegts',
+                   '-s', '1280x1200',
+                   '-codec:v', 'mpeg1video',
+                   '-b:v', '3000k',
+                   '-framerate', '30',
+                   '-r', '30',
+                   '-bf', '0',
+                   'https://cloudtracking-v2.herokuapp.com/cloudtrackinglivestream/1']
+    subprocess.call(command)
 
-# Initialize socket io
-def initialize_socketio(url):
-    sio = socketio.Client()
-
-    @sio.event
-    def connect():
-        print("Connected to Application Server")
-
-    sio.connect(url)
-    return sio
 
 def main():
-    global sock
-    sock = initialize_socketio(URL_APP_SERVER)
-    pipe = cloud_tracking.create_ffmpeg_pipe('opticalFlow/20191121-134744.mp4')
+    create_livestream()
+    cloud_tracking.main()
+    power_verification.main()
 
-    cloud_tracking.experiment_ffmpeg_pipe(pipe)
-    if sock is not None:
-        sock.disconnect()
 
 main()

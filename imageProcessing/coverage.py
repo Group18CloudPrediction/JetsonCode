@@ -1,9 +1,6 @@
 import numpy as np
 import cv2
 
-# A few constants that are used in this program
-SAT_THRESHOLD = 0.08  # Used for cloud detection
-
 
 def _calc_sat(r, g, b):
     """Formula for calculating saturation"""
@@ -24,7 +21,7 @@ def _calc_sat(r, g, b):
 v_sat = np.vectorize(_calc_sat)
 
 
-def cloud_recognition(img):
+def cloud_recognition(img, SAT_THRESHOLD=0.08):
     """Converts all pixel RGBs in an image to 0 (not cloud) or 255 (cloud)"""
     # OpenCV opens images as GBR. We need to change it to RGB, convert it to a numpy array
     # and then normalize all the values
