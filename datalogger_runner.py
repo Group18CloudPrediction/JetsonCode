@@ -14,10 +14,8 @@ from datalogger.cloud_height_data import CloudHeightData
 class DataloggerThread(Thread):
 	def __init__(self):
 		Thread.__init__(self)
-		#setup db here
-		print("setup db here")
 
-		#creds will need to be created on each system
+		# Creds will need to be created on each system
 		self.client = pymongo.MongoClient(creds.base_url + creds.username + creds.separator + creds.password + creds.cluster_url)
 		self.db = self.client.cloudTrackingData
 		datalogger_connected = False
@@ -25,23 +23,26 @@ class DataloggerThread(Thread):
 		while(not datalogger_connected):
 			try:
 				print("looking for datalogger")
-				self.datalogger = Datalogger('/dev/ttyS5') #path will need to change per system
+				# Path will need to change per system
+				self.datalogger = Datalogger('/dev/ttyS5')
 				datalogger_connected = True
 				print("datalogger connected")
 			except:
-				time.sleep(10) # wait 10 seconds then check if datalogger has been connected
+				# Wait 10 seconds then check if datalogger has been connected
+				time.sleep(10)
 				print("datalogger not connected")
 			
-		self.sleep_time = 60 #60 seconds
+		self.sleep_time = 60
 
 	def run(self):
 		while(True):
 			starttime = time.time()
 			self.the_date = datetime.utcnow()
-			self.datalogger.poll() # get the current weather data
+
+			# Get the current weather data
+			self.datalogger.poll()
 			height = self.calculate_cloud_height()
-			#NOTE: Don't really need this because power_verification is already sending to db
-			#self.send_weather_data_to_db()
+			self.send_weather_data_to_db()
 			self.send_cloud_height_data_to_db(height)
 			time.sleep(self.sleep_time - ((time.time() - starttime) % self.sleep_time))
 
