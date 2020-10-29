@@ -5,7 +5,7 @@ from datalogger.weather_data import WeatherData
 class Datalogger:
 	def __init__(self, path):
 		print("datalogger constructor")
-		self.ins = mmbus.Instrument(path, 1, mode='rtu')
+		self.ins = mmbus.Instrument(path, 1, mode='rtu', debug=True)
 		self.ins.serial.baudrate = 9600
 		self.ins.serial.bytesize = 8
 		self.ins.serial.parity = serial.PARITY_NONE

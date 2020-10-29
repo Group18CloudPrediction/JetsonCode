@@ -236,7 +236,7 @@ class PowerPredictionRunner(Thread):
 		verified_data_list = []
 
 		 # This gets the 15 most recent entries in the power prediction collection.
-		db_response = self.db.PowerPredictionData.find().sort([('_id', -1)]).limit(self.predict_out_mins)
+		db_response = self.db.PowerPredictionData.find({'system_num': substation.id}).sort([('_id', -1)]).limit(self.predict_out_mins)
 
 		# Find returns a 'cursor' to the document, not the actual document so you
 		# must iterate the cursor to get the actual documents
