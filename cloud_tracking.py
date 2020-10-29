@@ -177,7 +177,8 @@ class CloudTrackingRunner(Thread):
         byte_image = im_buffer.tobytes()
         post = {
             "author": "cloud_tracking.py",
-            "camera_frame": byte_image
+            "camera_frame": byte_image,
+            "system_num": substation_cfg.id
         }
 
         posts = self.db.cloudImage
@@ -193,7 +194,8 @@ class CloudTrackingRunner(Thread):
 
         post = {
             "author": "cloud_tracking.py",
-            "cloud_coverage": coverage
+            "cloud_coverage": coverage,
+            "system_num": substation_cfg.id
         }
 
         posts = self.db.cloudCoverageData

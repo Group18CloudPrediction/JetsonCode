@@ -3,7 +3,7 @@ import subprocess
 import power_verification
 
 import cloud_tracking
-from config import cloud_tracking_config as ct_cfg
+from config import cloud_tracking_config as ct_cfg, substation_info as substation_cfg
 
 
 def create_livestream():
@@ -18,7 +18,7 @@ def create_livestream():
                    '-framerate', '30',
                    '-r', '30',
                    '-bf', '0',
-                   'https://cloudtracking-v2.herokuapp.com/cloudtrackinglivestream/1']
+                   ct_cfg.URL_APP_SERVER+'cloudtrackinglivestream/'+substation_cfg.id]
     else:
         command = ['ffmpeg',
                    '-rtsp_transport', 'tcp',
@@ -30,7 +30,7 @@ def create_livestream():
                    '-framerate', '30',
                    '-r', '30',
                    '-bf', '0',
-                   'https://cloudtracking-v2.herokuapp.com/cloudtrackinglivestream/1']
+                   ct_cfg.URL_APP_SERVER+'cloudtrackinglivestream/'+substation_cfg.id]
     subprocess.call(command)
 
 
