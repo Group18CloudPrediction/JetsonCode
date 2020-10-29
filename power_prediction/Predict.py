@@ -15,14 +15,13 @@ POWSCALAR = 6470.0
 
 # Train Control Variables
 # -----------------------
-features    = 8 # Input variables in a timestep
-num_steps   = 3 # How many timesteps to consider at once
-# TODO choose final trained model for this,
-# or make that an argument for the webapp to control
+FEATURES    = 8 # Input variables in a timestep
+NUM_STEPS   = 3 # How many timesteps to consider at once
 
 # Remember to save favorite model
-model_file  = 'power_prediction/models/Power_Pred_model_2020_10_08_12_10.json'
-weight_file = 'power_prediction/weights/Power_Pred_weights_2020_10_08_12_10.h5'
+# TODO pass model as filename?
+model_file  = 'models/Power_Pred_model_2020_08_31_10_50.json'
+weight_file = 'weights/Power_Pred_weights_2020_08_31_10_50.h5'
 
 # LOAD FROM DISK
 json_file = open(model_file, 'r')
@@ -34,15 +33,15 @@ print("Loaded model from disk")
 
 # Testing with some data from 2018
 # April 11, 15:51-15:53
-#testinput1 = np.array(
-#        [[[855.19,48.00,15*.44704,(75.75-32)/1.8,4,11,15,51],
-#          [852.36,38.33,14*.44704,(75.73-32)/1.8,4,11,15,52],
-#          [849.53,28.66,13*.44704,(75.71-32)/1.8,4,11,15,53]]])
+testinput1 = np.array(
+        [[[855.19,48.00,15*.44704,(75.75-32)/1.8,4,11,15,51],
+          [852.36,38.33,14*.44704,(75.73-32)/1.8,4,11,15,52],
+          [849.53,28.66,13*.44704,(75.71-32)/1.8,4,11,15,53]]])
 # April 11, 15:54-15:56
-#testinput2 = np.array(
-#        [[[845.66,34.20,13*.44704,(75.63-32)/1.8,4,11,15,54],
-#          [843.79,39.70,13*.44704,(75.55-32)/1.8,4,11,15,55],
-#          [838.05,50.81,14*.44704,(75.40-32)/1.8,4,11,15,56]]])
+testinput2 = np.array(
+        [[[845.66,34.20,13*.44704,(75.63-32)/1.8,4,11,15,54],
+          [843.79,39.70,13*.44704,(75.55-32)/1.8,4,11,15,55],
+          [838.05,50.81,14*.44704,(75.40-32)/1.8,4,11,15,56]]])
 
 
 
@@ -58,7 +57,7 @@ def downScale(data):
                    data[0,:,5]/31.0,      # Day
                    data[0,:,6]/24.0,      # Hour
                    data[0,:,7]/60.0]      # Minute
-    output = output.reshape(1,3,8)
+    output = output.reshape(1,NUM_STEPS,FEATURES)
     return output
 
 def upScale(data):
@@ -71,7 +70,7 @@ def upScale(data):
                    data[0,:,6]*24.0,      # Hour
                    data[0,:,7]*60.0,      # Minute
                    data[0,:,8]*POWSCALAR] # Power
-    output = output.reshape(1,3,9)
+    output = output.reshape(1,NUM_STEPS,FEATURES + 1)
     return output
 
 def display(data):
@@ -117,89 +116,3 @@ def makePrediction(data, count, reset=True, powOnly=True):
     else:
         print(np.array(fulloutput).shape)
         return fulloutput
-#####################################3333
-'''
-def json_predict(jsonin):
-    # Test wrapper, try integrating as argument to makePrediction
-    featurelist = json.loads(jsonin)
-    for item in featurelist:
-        pass
-    makePrediction(obj['data'])
-    output = {}
-    #output['predictedPower'] = # Grab list from array
-    #output['predictedPower'] = # Grab list from array
-    return output
-'''
-
-    
-#####################################3333
-
-#GHI, spd, dir, temp, mon, day, min
-'''testinput1 = np.array(
-        [[[855.19,48.00,15*.44704,(75.75-32)/1.8,4,11,15,51],
-          [852.36,38.33,14*.44704,(75.73-32)/1.8,4,11,15,52],
-          [849.53,28.66,13*.44704,(75.71-32)/1.8,4,11,15,53]]])
-dicttest = {
-    "GHI" : [855.19, 852.36,849.53],
-    "windDir" : [48.00,38.33,28.66],
-    "windSpd" : [21.458,17.135,12.812],
-    "ambTemp" : [24.306,24.294,24.283]
-    }
-jsonout = json.dumps(dicttest)
-jsondata = json.loads(jsonout)
-#def jsonToInput(jsondata)
-output = {}
-timesteps = 3
-for t in range(timesteps):
-    for object in jsondata:
-        #print(jsondata[object][t])
-        output[t].append(jsondata[object][t])
-        # How to add data in time series cleverly?
-exit()'''
-
-
-#####################################3333
-
-
-
-
-
-
-# Just experimenting with the functions so far
-'''
-print("Input data")
-display(testinput1)
-print("Output data")
-print("Full")
-pred1 = makePrediction(testinput1, 2, True, False)
-print(len(pred1))
-'''
-'''
-print("Date:    " , int(round(pred1[4])), int(round(pred1[5]))
-        , int(round(pred1[6])), int(round(pred1[7])))
-print("GHI:     " , pred1[0])
-print("WindDir: " , pred1[1])
-print("WindSpd: " , pred1[2])
-print("Temp:    " , pred1[3])
-print("Power:   " , pred1[8])
-print()
-'''
-'''
-print(pred1)
-print("Pow only")
-pred1 = makePrediction(testinput1, 2, True, True)
-print(pred1)
-exit()
-
-pred2 = makePrediction(testinput2, 1, False, False)
-'''
-'''
-print(testinput1[0,1,:])
-print(pred1[0,0,:])
-print(testinput2[0,2,:])
-print(pred2[0,1,:])
-'''
-#display(pred1)
-#display(pred2)
-
-
