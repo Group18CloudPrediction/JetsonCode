@@ -155,7 +155,8 @@ class CloudTrackingRunner(Thread):
 
                 # Send cloud coverage data to MongoDB
                 if ct_cfg.send_to_db is True:
-                    self.send_image_to_db(prev)
+                    if ct_cfg.send_img_to_db is True:
+                        self.send_image_to_db(prev)
                     self.send_coverage_to_db(cloudPNG)
 
                 finishTime = current_milli_time()
