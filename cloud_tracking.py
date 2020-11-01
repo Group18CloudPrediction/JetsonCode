@@ -211,8 +211,8 @@ class CloudTrackingRunner(Thread):
             return
 
         byte_image = im_buffer.tobytes()
-        self.sock.emit(event_name, byte_image)
-        print("sock -> emit: ", event_name)
+        self.sock.emit(event_name + substation_cfg.id, byte_image)
+        print("sock -> emit: ", event_name + substation_cfg.id)
 
     def send_cloud_socket(self, frame):
         """Sends cloud image to website via socketIO"""
@@ -223,7 +223,7 @@ class CloudTrackingRunner(Thread):
         shadow = coverage.copy()
 
         # TURN SHADOW TO BLACK AND WHITE
-        cv2.cvtColor(shadow, cv2.COLOR_BGR2GRAY)
+        # cv2.cvtColor(shadow, cv2.COLOR_BGR2GRAY)
         shadow[(shadow[:, :, 3] > 0)] = (0, 0, 0, 127)
         self.send_image_socket(shadow, 'shadow')
 
