@@ -210,15 +210,9 @@ class CloudTrackingRunner(Thread):
             print("couldnt encode png image")
             return
 
-<<<<<<< Updated upstream
-        byte_image = im_buffer.tobytes()
-        self.sock.emit(event_name + substation_cfg.id, byte_image)
-        print("sock -> emit: ", event_name + substation_cfg.id)
-=======
         frame = im_buffer.tobytes()
         self.sock.emit(event_name, [frame, substation_cfg.id])
         print("sock -> emit: ", event_name)
->>>>>>> Stashed changes
 
     def send_cloud_socket(self, frame):
         """Sends cloud image to website via socketIO"""
@@ -229,10 +223,6 @@ class CloudTrackingRunner(Thread):
         shadow = coverage.copy()
 
         # TURN SHADOW TO BLACK AND WHITE
-<<<<<<< Updated upstream
-        # cv2.cvtColor(shadow, cv2.COLOR_BGR2GRAY)
-=======
->>>>>>> Stashed changes
         shadow[(shadow[:, :, 3] > 0)] = (0, 0, 0, 127)
         self.send_image_socket(shadow, 'shadow')
 
