@@ -16,12 +16,12 @@ POWSCALAR = 6470.0
 # Train Control Variables
 # -----------------------
 FEATURES    = 8 # Input variables in a timestep
-NUM_STEPS   = 3 # How many timesteps to consider at once
+NUM_STEPS   = 5 # How many timesteps to consider at once
 
 # Remember to save favorite model
 # TODO pass model as filename?
-model_file  = 'models/Power_Pred_model_2020_08_31_10_50.json'
-weight_file = 'weights/Power_Pred_weights_2020_08_31_10_50.h5'
+model_file  = 'models/Power_Pred_model_2020_10_08_12_10.json'
+weight_file = 'weights/Power_Pred_weights_2020_10_08_12_10.h5'
 
 # LOAD FROM DISK
 json_file = open(model_file, 'r')
@@ -36,7 +36,9 @@ print("Loaded model from disk")
 testinput1 = np.array(
         [[[855.19,48.00,15*.44704,(75.75-32)/1.8,4,11,15,51],
           [852.36,38.33,14*.44704,(75.73-32)/1.8,4,11,15,52],
-          [849.53,28.66,13*.44704,(75.71-32)/1.8,4,11,15,53]]])
+          [849.53,28.66,13*.44704,(75.71-32)/1.8,4,11,15,53],
+          [864.66,34.20,13*.44704,(75.63-32)/1.8,4,11,15,54],
+          [843.66,39.74,14*.44704,(75.55-32)/1.8,4,11,15,55]]])
 # April 11, 15:54-15:56
 testinput2 = np.array(
         [[[845.66,34.20,13*.44704,(75.63-32)/1.8,4,11,15,54],
@@ -86,7 +88,19 @@ def display(data):
             if len(y) == 9:
                 print("Power:   " , y[8])
             print()
-                
+
+def displayPrediction(data):
+    # TODO merge with upper display function
+    for y in data:
+        print("Date:    " , int(round(y[4])), int(round(y[5]))
+                , int(round(y[6])), int(round(y[7])))
+        print("GHI:     " , y[0])
+        print("WindDir: " , y[1])
+        print("WindSpd: " , y[2])
+        print("Temp:    " , y[3])
+        if len(y) == 9:
+            print("Power:   " , y[8])
+        print()
  
 # NOTE Important function
 def makePrediction(data, count, reset=True, powOnly=True):
@@ -116,3 +130,12 @@ def makePrediction(data, count, reset=True, powOnly=True):
     else:
         print(np.array(fulloutput).shape)
         return fulloutput
+
+'''
+#Testing the function
+test = makePrediction(testinput1, 3, reset=True, powOnly=False)
+print("REAL DATA")
+display(testinput1)
+print("PREDICTED DATA")
+displayPrediction(test)
+'''
