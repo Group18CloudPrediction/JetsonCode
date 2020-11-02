@@ -39,12 +39,45 @@ testinput1 = np.array(
           [849.53,28.66,13*.44704,(75.71-32)/1.8,4,11,15,53],
           [864.66,34.20,13*.44704,(75.63-32)/1.8,4,11,15,54],
           [843.66,39.74,14*.44704,(75.55-32)/1.8,4,11,15,55]]])
-# April 11, 15:54-15:56
+# April 11, 15:54-16:09
 testinput2 = np.array(
-        [[[845.66,34.20,13*.44704,(75.63-32)/1.8,4,11,15,54],
-          [843.79,39.70,13*.44704,(75.55-32)/1.8,4,11,15,55],
-          [838.05,50.81,14*.44704,(75.40-32)/1.8,4,11,15,56]]])
+        [[[846.66,34.19,13*.44704,(75.63-32)/1.8,4,11,15,54],
+          [843.79,39.74,13*.44704,(75.55-32)/1.8,4,11,15,55],
+          [840.92,45.27,13*.44704,(75.55-32)/1.8,4,11,15,55],
+          [838.05,50.81,13*.44704,(75.55-32)/1.8,4,11,15,55],
+          [837.39,42.90,13*.44704,(75.55-32)/1.8,4,11,15,55],
+          [836.72,34.99,13*.44704,(75.55-32)/1.8,4,11,15,55],
+          [834.55,27.08,13*.44704,(75.55-32)/1.8,4,11,15,55],
+          [833.06,26.04,13*.44704,(75.55-32)/1.8,4,11,15,55],
+          [831.56,39.70,13*.44704,(75.55-32)/1.8,4,11,15,55],
+          [830.07,39.70,13*.44704,(75.55-32)/1.8,4,11,15,55],
+          [825.41,39.70,13*.44704,(75.55-32)/1.8,4,11,15,55],
+          [820.75,39.70,13*.44704,(75.55-32)/1.8,4,11,15,55],
+          [816.09,39.70,13*.44704,(75.55-32)/1.8,4,11,15,55],
+          [813.72,50.81,14*.44704,(75.40-32)/1.8,4,11,15,56],
+          [811.35,50.81,14*.44704,(75.40-32)/1.8,4,11,15,56]]])
 
+    # How to format data for the network
+def toTimeSeries(inputData, timesteps, batches=-1, start=0):
+    ''' Data must be formatted in time series:
+    data = [0,1,2,3,4,5] becomes [[0,1,2,3], [1,2,3,4], [2,3,4,5]]
+    timesteps determines the size of the window, in the example it's 4
+    Use start to offset beginning, and batches to choose how many 
+    minutes to use beyond start
+    '''
+    # Trim if reaches past given data's bounds,
+    if ((batches + start > len(inputData) - timesteps - start) or
+            (batches < 0)):
+         batches = len(inputData) - timesteps - start
+    # Build Output
+    timeSeries = []
+    for t in range(start, start + batches ):
+        newRow = []
+        for dt in range(timesteps):
+            newRow.append(inputData[t + dt])
+        timeSeries.append(newRow)
+    # Output has shape (batches,timesteps,features)
+    return np.array(timeSeries)
 
 
 # Use the scalars given from findmaxvalues.py
