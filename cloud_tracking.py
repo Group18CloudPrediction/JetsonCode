@@ -6,8 +6,7 @@ import cv2
 import numpy as np
 import pymongo
 
-from config import cloud_tracking_config as ct_cfg, substation_info as substation_cfg
-from credentials import creds
+from config import cloud_tracking_config as ct_cfg, substation_info as substation_cfg, creds
 from imageProcessing import fisheye_mask as fisheye
 from imageProcessing.coverage import cloud_recognition
 from imageProcessing.sunPos import mask_sun_pixel, mask_sun_pysolar
@@ -26,6 +25,7 @@ def initialize_socketio(url):
         def connect():
             print("Connected to Application Server")
         sio.connect(url)
+
     except socketio.exceptions.ConnectionError as e:
         print(e)
         sio = None
@@ -210,9 +210,9 @@ class CloudTrackingRunner(Thread):
             print("couldnt encode png image")
             return
 
-        byte_image = im_buffer.tobytes()
-        self.sock.emit(event_name + substation_cfg.id, byte_image)
-        print("sock -> emit: ", event_name + substation_cfg.id)
+        frame = im_buffer.tobytes()
+        self.sock.emit(event_name, [frame, substation_cfg.id])
+        print("sock -> emit: ", event_name)
 
     def send_cloud_socket(self, frame):
         """Sends cloud image to website via socketIO"""
@@ -223,7 +223,6 @@ class CloudTrackingRunner(Thread):
         shadow = coverage.copy()
 
         # TURN SHADOW TO BLACK AND WHITE
-        # cv2.cvtColor(shadow, cv2.COLOR_BGR2GRAY)
         shadow[(shadow[:, :, 3] > 0)] = (0, 0, 0, 127)
         self.send_image_socket(shadow, 'shadow')
 
