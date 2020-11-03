@@ -6,7 +6,7 @@ import jsonpickle
 import config.creds as creds
 import config.substation_info as substation
 import power_prediction.Predict as Predict
-import power_prediction.Train as Train
+# import power_prediction.Train as Train
 
 from datalogger.datalogger import Datalogger
 from threading import Thread, Event
@@ -62,7 +62,7 @@ class PowerPredictionRunner(Thread):
 		while(not datalogger_connected):
 			try:
 				print("looking for datalogger")
-				self.datalogger = Datalogger('/dev/ttyS5') #path will need to change per system
+				self.datalogger = Datalogger('/dev/ttyUSB0') #path will need to change per system
 				datalogger_connected = True
 				print("datalogger connected")
 			except:
@@ -84,7 +84,7 @@ class PowerPredictionRunner(Thread):
 			add_current_data(self.datalogger)
 			#print("weather data before to timeseries")
 			#print(self.weather_data)
-			final_data = Train.toTimeSeries(weather_data_list, timesteps=3)
+			final_data = Predict.toTimeSeries(weather_data_list, timesteps=3)
 			print("final_data: " + str(final_data))
 			self.predicted_power = Predict.makePrediction(final_data, self.predict_out_mins) # will return a list of length number of minutes
 			print("predicted power")
@@ -208,7 +208,7 @@ class Get_Data_On_Startup(Thread):
 		self.run_num = 1
 		self.client = pymongo.MongoClient("mongodb+srv://" + creds.username + ":" + creds.password + "@cluster0.lgezy.mongodb.net/<dbname>?retryWrites=true&w=majority")
 		self.db = self.client.cloudTrackingData
-		self.datalogger = Datalogger('/dev/ttyS5') #path will need to change per system
+		self.datalogger = Datalogger('/dev/ttyUSB0') #path will need to change per system
 		self.sleep_time = 60 #60 seconds
 
 	def run(self):
