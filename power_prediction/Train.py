@@ -22,8 +22,8 @@ import numpy as np
 import pandas# ONLY USED FOR CSV<REPLACE
 import datetime
 # Following lines needed for gpu training
-physical_devices = tf.config.list_physical_devices('GPU')
-tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
+# physical_devices = tf.config.list_physical_devices('GPU')
+# tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
 
 date = datetime.datetime.now()
 formatdate = date.strftime('%Y_%m_%d_%H_%M')
