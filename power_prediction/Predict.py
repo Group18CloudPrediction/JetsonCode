@@ -21,8 +21,8 @@ NUM_STEPS   = 15 # How many timesteps to consider at once
 
 # Remember to save favorite model
 # TODO pass model as filename?
-model_file  = 'models/Power_Pred_model_2020_11_03_01_03.json'
-weight_file = 'weights/Power_Pred_weights_2020_11_03_01_03.h5'
+model_file  = './power_prediction/models/Power_Pred_model_2020_11_03_01_03.json'
+weight_file = './power_prediction/weights/Power_Pred_weights_2020_11_03_01_03.h5'
 
 # LOAD FROM DISK
 json_file = open(model_file, 'r')
