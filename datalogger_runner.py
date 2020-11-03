@@ -1,3 +1,7 @@
+#NOTE: This will not be used but will be left and commented
+# in case future users want a script that ONLY polls the datalogger
+# for weather data, calculates cloud height, and sends both to the db.
+
 import time
 from datetime import datetime
 from threading import Thread, Event
@@ -10,31 +14,33 @@ from datalogger.cloud_height_data import CloudHeightData
 class DataloggerThread(Thread):
 	def __init__(self):
 		Thread.__init__(self)
-		#setup db here
-		print("setup db here")
 
-		#creds will need to be created on each system
-		self.client = pymongo.MongoClient("mongodb+srv://" + creds.username + ":" + creds.password + "@cluster0.lgezy.mongodb.net/<dbname>?retryWrites=true&w=majority")
+		# Creds will need to be created on each system
+		self.client = pymongo.MongoClient(creds.base_url + creds.username + creds.separator + creds.password + creds.cluster_url)
 		self.db = self.client.cloudTrackingData
 		datalogger_connected = False
 
 		while(not datalogger_connected):
 			try:
 				print("looking for datalogger")
-				self.datalogger = Datalogger('/dev/ttyS5') #path will need to change per system
+				# Path will need to change per system
+				self.datalogger = Datalogger('/dev/ttyS5')
 				datalogger_connected = True
 				print("datalogger connected")
 			except:
-				time.sleep(10) # wait 10 seconds then check if datalogger has been connected
+				# Wait 10 seconds then check if datalogger has been connected
+				time.sleep(10)
 				print("datalogger not connected")
 			
-		self.sleep_time = 60 #60 seconds
+		self.sleep_time = 60
 
 	def run(self):
 		while(True):
 			starttime = time.time()
 			self.the_date = datetime.utcnow()
-			self.datalogger.poll() # get the current weather data
+
+			# Get the current weather data
+			self.datalogger.poll()
 			height = self.calculate_cloud_height()
 			self.send_weather_data_to_db()
 			self.send_cloud_height_data_to_db(height)
@@ -58,12 +64,11 @@ class DataloggerThread(Thread):
 				"rht_c": self.datalogger.weather_data.rht_c,
 				"tiltNS_deg": self.datalogger.weather_data.tiltNS_deg,
 				"tiltWE_deg": self.datalogger.weather_data.tiltWE_deg,
-				"tags": ["weather_data", "datalogger", "weather", "weather_station", "verified_data"],
 				"date": self.the_date,
 				"date_mins_only": the_date.replace(second=0, microsecond=0),
 				"system_num": substation.id}
 		
-		posts = self.db.WeatherData
+		posts = self.db.WeatherData_Only
 		post_id = posts.insert_one(post).inserted_id
 		print("post_id: " + str(post_id))
 
@@ -77,7 +82,6 @@ class DataloggerThread(Thread):
 			"cloud_height": c_height.cloud_height,
 			"calc_time": c_height.calc_time,
 			"calc_time_mins_only": c_height.calc_time_mins_only,
-			"tags": ["cloud_data", "datalogger", "weather", "weather_station"],
 			"date": self.the_date,
 			"date_mins_only": the_date.replace(second=0, microsecond=0),
 			"system_num": substation.id}
@@ -86,11 +90,8 @@ class DataloggerThread(Thread):
 		post_id = posts.insert_one(post).inserted_id
 		print("post_id: " + str(post_id))
 
-
 	def calculate_cloud_height(self):
-		c_height = CloudHeightData(self.datalogger.weather_data.airT_C, self.datalogger.weather_data.rh)
-
-		return c_height
+		return CloudHeightData(self.datalogger.weather_data.airT_C, self.datalogger.weather_data.rh)
 
 def main():
 	datalogger_runner = DataloggerThread()

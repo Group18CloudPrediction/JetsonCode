@@ -8,13 +8,19 @@ import config.substation_info as substation
 import power_prediction.Predict as Predict
 # import power_prediction.Train as Train
 
+from datalogger.cloud_height_data import CloudHeightData
 from datalogger.datalogger import Datalogger
 from threading import Thread, Event
 from datetime import datetime, timedelta
 
+# Global access to the previous weather data
 weather_data_list = []
-mins_of_previous_data = 3 # how many minutes of data to store in weather_data_list
 
+# How many minutes of data to store in weather_data_list
+# This is dependant on how the ML model was trained
+mins_of_previous_data = 3
+
+# Pull the relevant data needed for power prediction verification
 def format_current_weather_data(datalogger):
 	temp = []
 	temp.append(datalogger.weather_data.slrFD_W)
@@ -28,14 +34,18 @@ def format_current_weather_data(datalogger):
 
 	return temp
 
+# Adds the latest minute's weather data to the front of the list, shifting
+# everything else back, and dropping the oldest minute's weather data
 def add_current_data(datalogger):
 	print("shifting previous weather data")
 	global weather_data_list
 	print("size " + str(len(weather_data_list)))
+
+	# Drop off the oldest weather data
 	if(len(weather_data_list) > mins_of_previous_data):
 		weather_data_list.pop()
 
-	#cur_data = self.format_current_weather_data()
+	# Format newest data and add to front of weather data list
 	cur_data = format_current_weather_data(datalogger)
 	print("cur_data: " + str(cur_data))
 	weather_data_list.insert(0, cur_data) # should use a deque but maybe will fix later
@@ -59,6 +69,7 @@ class PowerPredictionRunner(Thread):
 		self.db = self.client.cloudTrackingData
 		datalogger_connected = False
 
+		# Continue checking for a datalogger connection at the given USB address
 		while(not datalogger_connected):
 			try:
 				print("looking for datalogger")
@@ -66,11 +77,15 @@ class PowerPredictionRunner(Thread):
 				datalogger_connected = True
 				print("datalogger connected")
 			except:
-				time.sleep(10) # wait 10 seconds then check if datalogger has been connected
+				# Wait 10 seconds then check if datalogger has been connected
+				time.sleep(10)
 				print("datalogger not connected")
 			
-		self.sleep_time = 60 #60 seconds
+		# Amount of time to sleep between runs in seconds
+		self.sleep_time = 60
 		self.predicted_power = 0
+
+		# How many minutes to predict power in the future
 		self.predict_out_mins = 15
 		self.the_date = datetime.utcnow()
 		#self.weather_data = [] # includes 4 past weather datas and current weather data
@@ -80,20 +95,31 @@ class PowerPredictionRunner(Thread):
 		while(True):
 			starttime = time.time()
 			self.the_date = datetime.utcnow()
-			self.datalogger.poll() # get the current weather data to use for the next prediction
+
+			# Get the current weather data to use for the predictions
+			# starting at the current minute
+			self.datalogger.poll()
 			add_current_data(self.datalogger)
-			#print("weather data before to timeseries")
-			#print(self.weather_data)
 			final_data = Predict.toTimeSeries(weather_data_list, timesteps=3)
+
 			print("final_data: " + str(final_data))
-			self.predicted_power = Predict.makePrediction(final_data, self.predict_out_mins) # will return a list of length number of minutes
+
+			# Returns a list of length number of minutes to predict
+			self.predicted_power = Predict.makePrediction(final_data, self.predict_out_mins)
 			print("predicted power")
 			print(self.predicted_power)
-			vd_list = self.run_verification() # returns error percentage and predicted power value
+			vd_list = self.run_verification()
+			height = self.calculate_cloud_height()
+
+			# Send various information to the db
+			self.send_cloud_height_data_to_db(height)
 			self.send_power_prediction_data_to_db(self.predicted_power)
 			self.send_weather_data_to_db()
 			self.send_verification_data_to_db(vd_list)
 			print("starting to sleep")
+
+			# Sleep for 'sleep_time' - when the thread began running
+			# Ex: 60 seconds sleep time, 10 seconds execution time, 60 - 10 = 50 seconds sleep time
 			time.sleep(self.sleep_time - ((time.time() - starttime) % self.sleep_time))
 
 	#NOTE: Not used currently
@@ -119,13 +145,32 @@ class PowerPredictionRunner(Thread):
 			#print("temp_list len: " + str(len(temp_list)))
 			#print(temp_list)
 
+	def send_cloud_height_data_to_db(self, c_height):
+		print("sendind cloud data to db")
+		the_date = self.the_date
+		post = {"author": "power_verification.py",
+			"temperature": c_height.temperature,
+			"humidity": c_height.humidity,
+			"dew_point": c_height.dew_point,
+			"cloud_height": c_height.cloud_height,
+			"calc_time": c_height.calc_time,
+			"calc_time_mins_only": c_height.calc_time_mins_only,
+			"date": the_date,
+			"date_mins_only": the_date.replace(second=0, microsecond=0),
+			"system_num": substation.id}
+		
+		posts = self.db.CloudHeightData
+		post_id = posts.insert_one(post).inserted_id
+		print("post_id: " + str(post_id))
+
 	def send_power_prediction_data_to_db(self, predicted_power):
 		print("sending predicted power")
 		dt = self.the_date.replace(second=0, microsecond=0)
 		post = {"author": "power_prediction.py",
 				"power_predictions": predicted_power,
 				"prediction_start_time": dt,
-				"prediction_end_time": dt + timedelta(minutes=len(predicted_power)), #length will correspond to number of minutes in prediction
+				# Length of the list will correspond to number of minutes of predictions
+				"prediction_end_time": dt + timedelta(minutes=len(predicted_power)),
 				"system_num": substation.id}
 		
 		posts = self.db.PowerPredictionData
@@ -150,7 +195,6 @@ class PowerPredictionRunner(Thread):
 				"rht_c": self.datalogger.weather_data.rht_c,
 				"tiltNS_deg": self.datalogger.weather_data.tiltNS_deg,
 				"tiltWE_deg": self.datalogger.weather_data.tiltWE_deg,
-				"tags": ["weather_data", "datalogger", "weather", "weather_station", "verified_data"],
 				"date": self.the_date,
 				"date_mins_only": the_date.replace(second=0, microsecond=0),
 				"date_time_only": the_date.replace(year=1970, month=1, day=1),
@@ -165,39 +209,56 @@ class PowerPredictionRunner(Thread):
 		vd_json = jsonpickle.encode(vd, make_refs=False)
 		post = {"author": "power_prediction.py",
 				"verified_power_data": vd_json,
-				"verified_time": self.the_date, # just use the time of the first object in list
+				"verified_time": self.the_date,
 				"system_num": substation.id}
 		
 		posts = self.db.PowerVerificationData
 		post_id = posts.insert_one(post).inserted_id
 		print("post_id: " + str(post_id))
 
+	# Calculate cloud height from air temp and relative humidity
+	def calculate_cloud_height(self):
+		return CloudHeightData(self.datalogger.weather_data.airT_C, self.datalogger.weather_data.rh)
+
+	# Verifies how close each of the power predictions were for the current minute.
+	# Ex: Verifies prediction made at 13:00 for 13:15
+	#								  13:01 for 13:15
+	#								  ...
+	#								  13:14 for 13:15
 	def run_verification(self):
 		print("running verification")
 		prev_preds = None
 		prev_power = -1
 		min_offset = self.predict_out_mins
 		verified_data_list = []
-		 # This gets the 15 most recent entries in the power prediction collection.
-		db_response = self.db.PowerPredictionData.find().sort([('_id', -1)]).limit(15)
 
-		# find returns a 'cursor' to the document, not the actual document so you
-		# must iterate the cursor to get the document
+		 # This gets the 15 most recent entries in the power prediction collection.
+		db_response = self.db.PowerPredictionData.find({'system_num': substation.id}).sort([('_id', -1)]).limit(self.predict_out_mins)
+
+		# Find returns a 'cursor' to the document, not the actual document so you
+		# must iterate the cursor to get the actual documents
 		for doc in db_response:
 			prev_preds = doc['power_predictions']
 
 			if prev_preds is not None:
+				# Get data starting from the beginning of the list
 				prev_power_pred = prev_preds[self.predict_out_mins - min_offset]
 				min_offset = min_offset - 1
+
+				# Get the real power measured by the weather sensor. Convert to units of the ML model - kw/h
 				prev_power_real = (self.datalogger.weather_data.slrFD_W * substation.panel_area / substation.kw) * substation.panel_eff
 				#print("real: " + str(prev_power))
-				diff = abs(prev_power_real - prev_power_pred) # current data - most recent past data
+				diff = abs(prev_power_real - prev_power_pred)
 				error_perc = diff/prev_power_pred * 100
 				vd = VerifiedPowerData(self.the_date, error_perc, prev_power_pred, prev_power_real)
 				verified_data_list.append(vd)
 		
+		# This list stores prediction verification from the oldest prediction to latest prediction
 		return verified_data_list
 		
+# Simply poll the datalogger once per minute to get enough data to begin making predictions.
+# Likely 15 minutes of data. This should only need to be run when there has been an extended
+# amount of time from the last system run.
 class Get_Data_On_Startup(Thread):
 	def __init__(self, finished_getting_data_event=None):
 		Thread.__init__(self)
@@ -206,11 +267,27 @@ class Get_Data_On_Startup(Thread):
 		#weather_data_list.clear()
 		self.finished_getting_data_event = finished_getting_data_event
 		self.run_num = 1
-		self.client = pymongo.MongoClient("mongodb+srv://" + creds.username + ":" + creds.password + "@cluster0.lgezy.mongodb.net/<dbname>?retryWrites=true&w=majority")
+		self.client = pymongo.MongoClient(creds.base_url + creds.username + creds.separator + creds.password + creds.cluster_url)
 		self.db = self.client.cloudTrackingData
-		self.datalogger = Datalogger('/dev/ttyUSB0') #path will need to change per system
+		datalogger_connected = False
+
+		# Continue checking for a datalogger connection at the given USB address
+		while(not datalogger_connected):
+			try:
+				print("looking for datalogger")
+
+				# Path will need to change per system
+				self.datalogger = Datalogger('/dev/ttyUSB0') #path will need to change per system
+				datalogger_connected = True
+				print("datalogger connected")
+			except:
+				# Wait 10 seconds then check if datalogger has been connected
+				time.sleep(10)
+				print("datalogger not connected")
+		
 		self.sleep_time = 60 #60 seconds
 
+	# Add the current weather data to the weather data list and send it to the db
 	def run(self):
 		while(True):
 			starttime = time.time()
@@ -220,7 +297,8 @@ class Get_Data_On_Startup(Thread):
 			add_current_data(self.datalogger)
 			self.send_weather_data_to_db()
 
-			if self.run_num == mins_of_previous_data: #got all the data we need
+			# Got all the data we need
+			if self.run_num == mins_of_previous_data:
 				break
 
 			self.run_num = self.run_num + 1
@@ -248,7 +326,6 @@ class Get_Data_On_Startup(Thread):
 				"rht_c": self.datalogger.weather_data.rht_c,
 				"tiltNS_deg": self.datalogger.weather_data.tiltNS_deg,
 				"tiltWE_deg": self.datalogger.weather_data.tiltWE_deg,
-				"tags": ["weather_data", "datalogger", "weather", "weather_station", "verified_data"],
 				"date": self.the_date,
 				"date_mins_only": the_date.replace(second=0, microsecond=0),
 				"date_time_only": the_date.replace(year=1970, month=1, day=1),
