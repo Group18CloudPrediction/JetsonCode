@@ -17,7 +17,6 @@ from tensorflow.keras import Input, Model
 from tensorflow.keras.models import Sequential, model_from_json
 from tensorflow.keras.layers import Dense, LSTM, Dropout
 from tensorflow.keras.preprocessing import sequence
-from sklearn import preprocessing
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas# ONLY USED FOR CSV<REPLACE
@@ -32,22 +31,27 @@ formatdate = date.strftime('%Y_%m_%d_%H_%M')
 '''
 Train Control Variables
 '''
-runtitle    = "name of the attempt for graph"
-features    = 8 # Input variables in a timestep
-num_steps   = 5 # How many timesteps to consider at once
-num_batches = 240
-num_epochs  = 1 #50 
+runtitle    = "Combined time groups, 50 epochs full after 100 small, 15 steps"
+FEATURES    = 6 # Input variables in a timestep
+
+NUM_STEPS   = 15 # How many timesteps to consider at once
+NUM_BATCHES = 240
+NUM_EPOCHS  = 50
 # NOTE Always check if you're training with proper data
-train_file = 'olddata/Jan_interpolated.csv' # Just Jan for fast proto
-test_file = 'olddata/Feb_interpolated.csv'  # Just Feb for fast proto
-#train_file  = 'olddata/2019_Interpolated_Data.csv'# All 2019 (SLOW)
-#test_file  = 'olddata/2018_Interpolated_Data.csv' # All 2018 (SLOW)
+fulldataset = True
+load_model = True
+
+if fulldataset:
+    train_file  = 'olddata/2019_Interpolated_Data.csv'# All 2019 (SLOW)
+    test_file  = 'olddata/2018_Interpolated_Data.csv' # All 2018 (SLOW)
+else:
+    train_file = 'olddata/Jan_interpolated.csv' # Just Jan for fast proto
+    test_file = 'olddata/Feb_interpolated.csv'  # Just Feb for fast proto
 ''' File Control '''
 # Choose to load a model to continue training
-load_model = False
-load_model_file = 'models/Power_Pred_model_2020_10_05_16_17.json'
-load_weight_file = 'weights/Power_Pred_weights_2020_10_05_16_17.h5'
-load_history_file = 'history/Power_Pred_history_2020_10_05_16_17.csv'
+load_model_file = 'models/Power_Pred_model_2020_11_02_23_31.json'
+load_weight_file = 'weights/Power_Pred_weights_2020_11_02_23_31.h5'
+load_history_file = 'history/Power_Pred_history_2020_11_02_23_31.csv'
 model_file  = 'models/Power_Pred_model_' + formatdate + '.json'
 weight_file = 'weights/Power_Pred_weights_' + formatdate + '.h5'
 history_file = 'history/Power_Pred_his_' + formatdate + '.csv'
@@ -74,18 +78,19 @@ def file_to_data(csv):
     def toCelsius(Fahrenheit):
         return (Fahrenheit - 32) / 1.8
     ambTemp_data = loadcsv['LF_WS1_TempAmb F'].apply(toCelsius)
-    month = [] ; day = [] ; hour = [] ; minute = []
-    for i in range(len(loadcsv)): 
-        month.append(float(str(loadcsv['Timestamp'][i])[5:7])/12.0)
-        day.append(float(str(loadcsv['Timestamp'][i])[8:10])/31.0)
-        hour.append(float(str(loadcsv['Timestamp'][i])[11:13])/24.0)
-        minute.append(float(str(loadcsv['Timestamp'][i])[14:16])/60.0)
+    month = [] ; hour = [] #; minute = [] ; day = []
+    for i in range(len(loadcsv)): # Combine hours + minutes, months + days, index at 0 so subtract 1
+        month.append((float(str(loadcsv['Timestamp'][i])[5:7]) - 1 + 
+            (float(str(loadcsv['Timestamp'][i])[8:10]) - 1)/31.0)/12.0)
+        #day.append(float(str(loadcsv['Timestamp'][i])[8:10])/31.0)
+        hour.append((float(str(loadcsv['Timestamp'][i])[11:13]) - 1 +
+            (float(str(loadcsv['Timestamp'][i])[14:16]) - 1)/60.0)/24.0)
 
 
     # NOTE Scaled by values found in findmaxvalues.py for data
     # Scalars are maximums of data file + 30% for safety
         # Sub Note: That margin of safety should be checked for
-        # its effects on accuracy 
+        # its effects on accuracy TODO easy test just divide 1.3 mult 1.1 right here
     GHI_SCALAR = 1875.0   # W/m
     WINDDIR_SCALAR = 360.0# deg
     WINDSPD_SCALAR = 21.0 # mps (?)
@@ -107,9 +112,11 @@ def file_to_data(csv):
     # can not have power as an input parameter.
     # np.c_ appends columns, change this to add/remove features
     input_data = np.c_[scaled_GHI,scaled_windDir,scaled_windSpd,
-            scaled_temp,month,day,hour,minute]
+            scaled_temp,month,hour]
+            #scaled_temp,month,day,hour,minute]
     output_data = np.c_[scaled_GHI,scaled_windDir,scaled_windSpd,
-            scaled_temp,month,day,hour,minute,scaled_power]
+            scaled_temp,month,hour,scaled_power]
+            #scaled_temp,month,day,hour,minute,scaled_power]
     return input_data, output_data
 
 
@@ -142,10 +149,10 @@ test_input_data,test_output_data = file_to_data(test_file)
 
 # Remember to start y a step ahead to output t+1
 # also stop x a step short to make final prediction novel
-x_train = toTimeSeries(train_input_data[0:-1], timesteps=num_steps)
-y_train = toTimeSeries(train_output_data[1:], timesteps=num_steps)
-x_test = toTimeSeries(test_input_data[0:-1], timesteps=num_steps)
-y_test = toTimeSeries(test_output_data[1:], timesteps=num_steps)
+x_train = toTimeSeries(train_input_data[0:-1], timesteps=NUM_STEPS)
+y_train = toTimeSeries(train_output_data[1:], timesteps=NUM_STEPS)
+x_test = toTimeSeries(test_input_data[0:-1], timesteps=NUM_STEPS)
+y_test = toTimeSeries(test_output_data[1:], timesteps=NUM_STEPS)
 
 
 '''
@@ -160,17 +167,23 @@ if load_model:
     model.load_weights(load_weight_file)
     print("Loaded model from disk")
 else:
-    inputs = Input(shape=(num_steps,features))
-    lstm1 = LSTM(features, input_shape = (num_steps,features),
+    inputs = Input(shape=(NUM_STEPS,FEATURES))
+    lstm1 = LSTM(FEATURES, input_shape = (NUM_STEPS,FEATURES),
         return_sequences=True)(inputs)
-    drops = Dropout(.2)(lstm1) # todo evaluate
-    lstm2 = LSTM(12, input_shape = (num_steps,features),
-        return_sequences=True)(drops)
-    outputs = Dense(features+1, activation='tanh')(lstm2)
+    #drops = Dropout(.2)(lstm1) # todo evaluate
+    lstm2 = LSTM(36, input_shape = (NUM_STEPS,FEATURES),
+        return_sequences=True)(lstm1) # (drops)
+    #lstm3 = LSTM(36, input_shape = (NUM_STEPS,FEATURES),
+        #return_sequences=True)(lstm2) 
+#    lstm4 = LSTM(12, input_shape = (NUM_STEPS,FEATURES),
+        #return_sequences=True)(lstm3) 
+    outputs = Dense(FEATURES+1, activation='tanh')(lstm2)
     model = Model(inputs=inputs, outputs=outputs)
     print("New model instance")
 
-model.compile(loss='mean_squared_error', optimizer='adam') # Evaluate rmsprop
+#TODO check this out
+#model.compile(optimizer='rmsprop', loss='mean_squared_error', metrics=["accuracy"]) # Evaluate rmsprop
+model.compile(loss='mean_squared_error', optimizer='adam')
 model.summary()
 
 #Dynamic learning rate scheduler
@@ -187,13 +200,13 @@ def step_decay(epoch):
 # Keeps internal "memory" chronological
 loss_train = []
 loss_val = []
-graphepochs = range(1,num_epochs+1)
-for e in range(num_epochs):
-    print("Epoch ", e, " / ", num_epochs)
+graphepochs = range(1,NUM_EPOCHS+1)
+for e in range(NUM_EPOCHS):
+    print("Epoch ", e + 1, " / ", NUM_EPOCHS)
     # TODO set learning rate
     # Look into "dynamic learning rate"
     history = model.fit(x_train,y_train, epochs=1,
-            batch_size=num_batches, shuffle=False,
+            batch_size=NUM_BATCHES, shuffle=False,
             validation_data=(x_test,y_test))
     #print("KEYS:")
     #print(history.history.keys())
@@ -208,21 +221,6 @@ plt.plot(graphepochs, loss_val, 'r', label='Validation Loss')
 plt.title(runtitle)
 plt.xlabel('Epochs')
 plt.ylabel('Loss')
-plt.legend()
-plt.show()
-
-# Plot the derivative of the loss
-d_dt_train_loss = []
-d_dt_val_loss = []
-for t in range(1,len(loss_val)):
-    d_dt_train_loss.append(loss_train[t] - loss_train[t-1])
-    d_dt_val_loss.append(loss_val[t] - loss_val[t-1])
-plt.figure(1)
-plt.plot(graphepochs, d_dt_train_loss, 'g', label='d/dt(Train Loss)')
-plt.plot(graphepochs, d_dt_val_loss, 'y', label='d/dt(Validation Loss)')
-plt.title("d/dt(",runtitle,")")
-plt.xlabel('Epochs')
-plt.ylabel('d/dt(Loss)')
 plt.legend()
 plt.show()
 
@@ -244,8 +242,7 @@ print("History: " + history_file)
 #Save the history for expanding or transfer learning models
 
 
-
-
+# For programs using this model:
 ''' LOAD FROM DISK
 json_file = open(model_file, 'r')
 loaded_model = json_file_read()
