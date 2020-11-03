@@ -6,7 +6,7 @@ import jsonpickle
 import config.creds as creds
 import config.substation_info as substation
 import power_prediction.Predict as Predict
-import power_prediction.Train as Train
+# import power_prediction.Train as Train
 
 from datalogger.cloud_height_data import CloudHeightData
 from datalogger.datalogger import Datalogger
@@ -73,9 +73,7 @@ class PowerPredictionRunner(Thread):
 		while(not datalogger_connected):
 			try:
 				print("looking for datalogger")
-
-				# path will need to change per system
-				self.datalogger = Datalogger('/dev/ttyS5')
+				self.datalogger = Datalogger('/dev/ttyUSB0') #path will need to change per system
 				datalogger_connected = True
 				print("datalogger connected")
 			except:
@@ -102,9 +100,8 @@ class PowerPredictionRunner(Thread):
 			# starting at the current minute
 			self.datalogger.poll()
 			add_current_data(self.datalogger)
+			final_data = Predict.toTimeSeries(weather_data_list, timesteps=3)
 
-			# Convert the weather data to the timeseries format needed for the ML algorithm
-			final_data = Train.toTimeSeries(weather_data_list, timesteps=3)
 			print("final_data: " + str(final_data))
 
 			# Returns a list of length number of minutes to predict
@@ -280,14 +277,14 @@ class Get_Data_On_Startup(Thread):
 				print("looking for datalogger")
 
 				# Path will need to change per system
-				self.datalogger = Datalogger('/dev/ttyS5')
+				self.datalogger = Datalogger('/dev/ttyUSB0') #path will need to change per system
 				datalogger_connected = True
 				print("datalogger connected")
 			except:
 				# Wait 10 seconds then check if datalogger has been connected
 				time.sleep(10)
 				print("datalogger not connected")
-
+		
 		self.sleep_time = 60 #60 seconds
 
 	# Add the current weather data to the weather data list and send it to the db
