@@ -37,7 +37,7 @@ def create_livestream():
 def main():
     create_livestream()
     cloud_tracking.main()
-    power_verification.main()
+    #power_verification.main()
 
 
 main()
