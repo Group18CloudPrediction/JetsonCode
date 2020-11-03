@@ -30,7 +30,7 @@ def create_livestream():
                    '-framerate', '30',
                    '-r', '30',
                    '-bf', '0',
-                   ct_cfg.URL_APP_SERVER+'cloudtrackinglivestream/'+substation_cfg.id]
+                   ct_cfg.URL_APP_SERVER+'cloudtrackinglivestream/sub-'+substation_cfg.id]
     subprocess.call(command)
 
 
