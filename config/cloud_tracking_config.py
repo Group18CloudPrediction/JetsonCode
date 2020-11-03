@@ -1,7 +1,7 @@
 # CLOUD_TRACKING CONSTANTS
 VIDEO_PATH = 'opticalFlow/test1sec.mp4'
-URL_APP_SERVER = 'http://localhost:3000/'
-# URL_APP_SERVER = 'https://cloudtracking-v2.herokuapp.com/'
+# URL_APP_SERVER = 'http://localhost:3000/'
+URL_APP_SERVER = 'https://cloudtracking-v2.herokuapp.com/'
 DISPLAY_SIZE = (512, 384)
 SUN_RADIUS = 50
 
