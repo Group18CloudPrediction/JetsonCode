@@ -101,7 +101,7 @@ def mask_sun_pysolar(lat, long, sun_radius):
     sun_center = (point[1][0], point[0][0])
 
     # Mask the sun in the image, store the masked area as 'sunPixels'
-    sun_pixels = draw_sun_circle()
+    sun_pixels = draw_sun_circle(sun_radius, sun_center, sun_image)
 
     # TODO: check if the sun is not out then:
     # return None, None
