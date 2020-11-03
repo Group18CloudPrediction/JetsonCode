@@ -64,8 +64,8 @@ def mask_sun_pixel(img, sun_radius, SUN_THRESHOLD=2.9375, FILTER_SIZE=25):
 
 def mask_sun_pysolar(lat, long, sun_radius):
     """Returns point at center of sun and pixel mask for sun."""
-    # date = tzlocal.get_localzone().localize(datetime.now())
-    date = datetime(2019, 10, 19, 15, 42, 00, tzinfo=tzlocal.get_localzone())
+    date = tzlocal.get_localzone().localize(datetime.now())
+    # date = datetime(2019, 10, 19, 15, 42, 00, tzinfo=tzlocal.get_localzone())
     # frame = cv2.resize(frame1, (640, 480))
 
     # 2.) Find sun using (azimuth, altitude)
