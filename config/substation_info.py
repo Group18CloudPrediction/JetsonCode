@@ -1,5 +1,5 @@
 # info on substation stanton
-id = "28"
+id = "27"
 panel_area = 25172
 panel_eff = .18
 kw = 1000

@@ -7,7 +7,7 @@ SUN_RADIUS = 50
 
 # CLOUD_TRACKING FLAGS
 livestream_online = False
-send_to_db = False
+send_to_db = True
 send_img_to_db = False
 socket_on = True
 do_mask = True
