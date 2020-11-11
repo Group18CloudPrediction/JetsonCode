@@ -129,12 +129,7 @@ def experiment_step(prev, next):
         next = fisheye.image_crop(next)
 
     # Locate center of sun + pixels that are considered "sun"
-    if ct_cfg.livestream_online is True:
-        sun_center, sun_pixels = mask_sun_pysolar(
-            substation_cfg.LAT, substation_cfg.LONG, ct_cfg.SUN_RADIUS)
-    else:
-        # If locally stored video is being used for footage, sun must be located by pixel intensity, as time and long_lat coordinates aren't available to use pysolar
-        sun_center, sun_pixels = mask_sun_pixel(next, ct_cfg.SUN_RADIUS)
+    sun_center, sun_pixels = mask_sun_pixel(next, ct_cfg.SUN_RADIUS)
 
     cv2.circle(prev, sun_center, ct_cfg.SUN_RADIUS, (255, 0, 0), -1)
     cv2.circle(next, sun_center, ct_cfg.SUN_RADIUS, (255, 0, 0), -1)
