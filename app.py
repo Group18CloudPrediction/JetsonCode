@@ -1,16 +1,13 @@
-import base64
 import subprocess as sp
-import sys
+import base64
 import time
-
+import sys
 import cv2
 import numpy as np
-import pymongo
 import socketio
+from multiprocessing import Process, Queue
 
-from config import cloud_tracking_config as ct_cfg
-from config import creds
-from config import substation_info as substation_cfg
+from config import cloud_tracking_config as ct_cfg, substation_info as substation_cfg, creds
 from imageProcessing import fisheye_mask as fisheye
 from imageProcessing.coverage import cloud_recognition
 from imageProcessing.sunPos import mask_sun_pixel, mask_sun_pysolar
@@ -20,113 +17,97 @@ from opticalFlow import opticalDense
 def current_milli_time(): return int(round(time.time() * 1000))
 
 
+MASK_RADIUS_RATIO = 3.5
+SECONDS_PER_FRAME = 1
+SECONDS_PER_PREDICTION = 30
+
+# FLAGS -- used to test different functionalities
+display_images = True
+send_images = True
+do_coverage = True
 sock = None
-db = None
+
+# Initialize socket io
 
 
 def initialize_socketio(url):
-    """Initialize socket io"""
     sio = socketio.Client()
 
-    try:
-        @sio.event
-        def connect():
-            print("Connected to Application Server")
-        sio.connect(url)
+    @sio.event
+    def connect():
+        print("Connected to Application Server")
 
-    except socketio.exceptions.ConnectionError as e:
-        print(e)
-        sio = None
+    sio.connect(url)
     return sio
 
 
-def send_coverage_to_db(coverage):
-    """Sends percent cloud coverage to database"""
+def send_coverage(coverage):
+    if sock is None:
+        return
+
     cloud = np.count_nonzero(coverage[:, :, 3] > 0)
     not_cloud = np.count_nonzero(coverage[:, :, 3] == 0)
 
     coverage = np.round((cloud / (cloud + not_cloud)) * 100, 2)
 
-    post = {
-        "author": "cloud_tracking.py",
-        "cloud_coverage": coverage,
-        "system_num": substation_cfg.id
-    }
+    print(coverage)
 
-    posts = db.cloudCoverageData
-    post_id = posts.insert_one(post).inserted_id
-    print("DB sent -> cover_post_id: " + str(post_id))
+    sock.emit('coverage_data', {"cloud_coverage": coverage})
 
 
-def send_image_to_db(frame):
-    """Send inputted image as png byte array to database"""
-    success, im_buffer = cv2.imencode('.png', frame)
-    cv2.imwrite('cloudImage.png', frame)
-    if success is False:
-        print("couldnt encode png image")
+def send_image(image, event_name):
+    if send_images is False or sock is None:
         return
-
-    byte_image = im_buffer.tobytes()
-    post = {
-        "author": "cloud_tracking.py",
-        "camera_frame": byte_image,
-        "system_num": substation_cfg.id
-    }
-
-    posts = db.cloudImage
-    post_id = posts.insert_one(post).inserted_id
-    print("DB sent -> img_post_id: " + str(post_id))
-
-
-def send_image_socket(image, event_name):
-    """Emits an image through socketIO connection"""
     success, im_buffer = cv2.imencode('.png', image)
 
     if success is False:
         print("couldnt encode png image")
         return
 
-    frame = im_buffer.tobytes()
-    sock.emit(event_name, [frame, substation_cfg.id])
-    print("sock -> emit: ", event_name)
+    byte_image = im_buffer.tobytes()
+    sock.emit(event_name, byte_image)
+
+# send coverage image
 
 
-def send_cloud_socket(frame):
-    """Sends cloud image to website via socketIO"""
-    send_image_socket(frame, 'coverage')
+def send_cloud(frame):
+    send_image(frame, 'coverage')
 
 
-def send_shadow_socket(coverage):
-    """Sends shadow image to website via socketIO"""
+def send_shadow(coverage):
     shadow = coverage.copy()
-
     shadow[(shadow[:, :, 3] > 0)] = (0, 0, 0, 127)
-    send_image_socket(shadow, 'shadow')
+    send_image(shadow, 'shadow')
 
 
-def byteRead_to_npArray(rawimg):
-    """Transform byte read into a numpy array"""
-    img = np.frombuffer(rawimg, dtype='uint8')
-    img = img.reshape((768, 1024, 3))
-    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-    img = np.fliplr(img)
-    return img
+def black2transparent(bgr):
+    bgra = cv2.cvtColor(bgr, cv2.COLOR_BGR2BGRA)
+    bgra[(bgra[:, :, 0:3] == [0, 0, 0]).all(2)] = (0, 0, 0, 0)
+    return bgra
 
 
 def experiment_step(prev, next):
-    """Perform image processing + optical flow on the two inputted frames"""
+    before = current_milli_time()
     clouds = None
-    sun_center = None
-    sun_pixels = None
 
-    # Apply fisheye mask
     if ct_cfg.do_mask is True:
-        prev, next = fisheye.create_fisheye_mask(prev, next)
+        mask = fisheye.create_fisheye_mask(prev, next, MASK_RADIUS_RATIO)
 
-    # crop image to square to eliminate curved lens interference
     if ct_cfg.do_crop is True:
-        prev = fisheye.image_crop(prev)
-        next = fisheye.image_crop(next)
+        w = prev.shape[0]
+        h = prev.shape[1]
+        s = w / MASK_RADIUS_RATIO
+
+        top_edge = int(h/2-s)
+        bottom_edge = int(h/2 + s)
+
+        left_edge = int(w/2-s)
+        right_edge = int(w/2 + s)
+        prev = prev[left_edge:right_edge,  top_edge:bottom_edge, :]
+        next = next[left_edge:right_edge,  top_edge:bottom_edge, :]
+
+    # Find the flow vectors for the prev and next images
+    flow_vectors = opticalDense.calculate_opt_dense(prev, next)
 
     # Locate center of sun + pixels that are considered "sun"
     if ct_cfg.livestream_online is True:
@@ -139,17 +120,37 @@ def experiment_step(prev, next):
     cv2.circle(prev, sun_center, ct_cfg.SUN_RADIUS, (255, 0, 0), -1)
     cv2.circle(next, sun_center, ct_cfg.SUN_RADIUS, (255, 0, 0), -1)
 
-    # Convert pixel opacity values to not cloud (0) or cloud (1) -> based on pixel saturation
-    clouds = cloud_recognition(next)
+    if do_coverage is True:
+        clouds = cloud_recognition(next)
 
-    # Find the flow vectors for the prev and next images
-    flow_vectors = opticalDense.calculate_opt_dense(prev, next)
+    flow, _, __ = opticalDense.draw_arrows(clouds.copy(), flow_vectors)
 
-    # Draw vector field based on cloud/not cloud image and displacement vectors
-    flow, __, __ = opticalDense.draw_arrows(clouds.copy(), flow_vectors, 10)
+    after = current_milli_time()
+    elapsed = (after - before)
+    print('Experiment step took: %s ms' % elapsed)
 
     # Return experiment step
-    return clouds, flow
+    return (prev, next, flow, clouds)
+
+
+def experiment_display(prev, next, flow, coverage):
+    if display_images is False:
+        return
+    # Resize the images for visibility
+    flow_show = cv2.resize(flow, ct_cfg.DISPLAY_SIZE)
+    prev_show = cv2.resize(prev, ct_cfg.DISPLAY_SIZE)
+    next_show = cv2.resize(next, ct_cfg.DISPLAY_SIZE)
+
+    # Show the images
+    cv2.imshow('flow?', flow_show)
+    cv2.imshow('previous', prev_show)
+    cv2.imshow('next', next_show)
+
+    # Wait 30s for ESC and return false if pressed
+    k = cv2.waitKey(30) & 0xff
+    if (k == 27):
+        return False
+    return True
 
 
 def create_ffmpeg_pipe():
@@ -179,35 +180,43 @@ def create_ffmpeg_pipe():
 
 
 def experiment_ffmpeg_pipe(pipe):
+    before = current_milli_time()
+
+    # BRONZE SOLUTION
+    First = True
+    BLOCK = False
+
     while True:
         try:
             prev_rawimg = pipe.stdout.read(1024*768*3)
             # transform the byte read into a numpy array
-            prev = byteRead_to_npArray(prev_rawimg)
+            prev = np.fromstring(prev_rawimg, dtype='uint8')
+            prev = prev.reshape((768, 1024, 3))
+            prev = cv2.cvtColor(prev, cv2.COLOR_RGB2BGR)
+            prev = np.fliplr(prev)
 
             # throw away the data in the pipe's buffer.
             pipe.stdout.flush()
 
             next_rawimg = pipe.stdout.read(1024*768*3)
             # transform the byte read into a np array
-            next = byteRead_to_npArray(next_rawimg)
+            next = np.fromstring(next_rawimg, dtype='uint8')
+            next = next.reshape((768, 1024, 3))
+            next = cv2.cvtColor(next, cv2.COLOR_RGB2BGR)
+            next = np.fliplr(next)
 
             # throw away the data in the pipe's buffer.
             pipe.stdout.flush()
 
-            cloudPNG, flow = experiment_step(prev, next)
+            (prev, next, flow, coverage) = experiment_step(prev, next)
 
-            # Send cloud image, and shadow image via socketIO to website
-            if ct_cfg.socket_on is True:
-                send_cloud_socket(flow)
-                send_shadow_socket(cloudPNG)
+            send_cloud(flow)
+            send_shadow(coverage)
+            send_coverage(coverage)
 
-            # Send cloud coverage data to MongoDB
-            if ct_cfg.send_to_db is True:
-                if ct_cfg.send_img_to_db is True:
-                    send_image_to_db(prev)
-                send_coverage_to_db(cloudPNG)
-
+            # Break if ESC key was pressed
+            if (experiment_display(prev, next, flow, coverage) == False):
+                break
         except Exception as inst:
             print(inst)
             break
@@ -216,24 +225,10 @@ def experiment_ffmpeg_pipe(pipe):
 
 def main():
     global sock
-    global db
-
-    # creds will need to be created on each system
-    client = pymongo.MongoClient("mongodb+srv://" + creds.username + ":" +
-                                 creds.password + "@cluster0.lgezy.mongodb.net/<dbname>?retryWrites=true&w=majority")
-    db = client.cloudTrackingData
-
-    # initialize ffmpeg pipe
+    sock = initialize_socketio(ct_cfg.URL_APP_SERVER)
     pipe = create_ffmpeg_pipe()
 
-    # initialize socket
-    if ct_cfg.socket_on is True:
-        sock = initialize_socketio(ct_cfg.URL_APP_SERVER)
-    else:
-        sock = None
-
     experiment_ffmpeg_pipe(pipe)
-
     if sock is not None:
         sock.disconnect()
 

@@ -1,15 +1,12 @@
 import subprocess as sp
 import time
 from threading import Thread
-
+import socketio
 import cv2
 import numpy as np
 import pymongo
-import socketio
 
-from config import cloud_tracking_config as ct_cfg
-from config import creds
-from config import substation_info as substation_cfg
+from config import cloud_tracking_config as ct_cfg, substation_info as substation_cfg, creds
 from imageProcessing import fisheye_mask as fisheye
 from imageProcessing.coverage import cloud_recognition
 from imageProcessing.sunPos import mask_sun_pixel, mask_sun_pysolar
