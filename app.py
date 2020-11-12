@@ -138,6 +138,7 @@ def experiment_step(prev, next):
         w = prev.shape[0]
         h = prev.shape[1]
         s = w / MASK_RADIUS_RATIO
+=======
     # Locate center of sun + pixels that are considered "sun"
     if ct_cfg.livestream_online is True:
         sun_center, sun_pixels = mask_sun_pysolar(
@@ -145,7 +146,7 @@ def experiment_step(prev, next):
     else:
         # If locally stored video is being used for footage, sun must be located by pixel intensity, as time and long_lat coordinates aren't available to use pysolar
         sun_center, sun_pixels = mask_sun_pixel(next, ct_cfg.SUN_RADIUS)
-
+>>>>>>> parent of 4436385... Update app.py
 
         top_edge = int(h/2-s)
         bottom_edge = int(h/2 + s)
