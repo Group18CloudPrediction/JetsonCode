@@ -31,26 +31,6 @@ class Datalogger:
 		self.weather_data = WeatherData(slrFD_W, rain_mm, strikes, dist_km, ws_ms, windDir, maxWS_ms, airT_C, vp_mmHg, bp_mmHg, rh, rht_c, tiltNS_deg, tiltWE_deg)
 		self.print_data_test()
 		return self.weather_data
-
-	def poll_and_return(self):
-		slrFD_W = self.ins.read_float(0, functioncode=3, number_of_registers=2, byteorder=0)
-		rain_mm = self.ins.read_float(2, functioncode=3, number_of_registers=2, byteorder=0)
-		strikes = self.ins.read_float(4, functioncode=3, number_of_registers=2, byteorder=0)
-		dist_km = self.ins.read_float(6, functioncode=3, number_of_registers=2, byteorder=0)
-		ws_ms = self.ins.read_float(8, functioncode=3, number_of_registers=2, byteorder=0)
-		windDir = self.ins.read_float(10, functioncode=3, number_of_registers=2, byteorder=0)
-		maxWS_ms = self.ins.read_float(12, functioncode=3, number_of_registers=2, byteorder=0)
-		airT_C = self.ins.read_float(14, functioncode=3, number_of_registers=2, byteorder=0)
-		vp_mmHg = self.ins.read_float(16, functioncode=3, number_of_registers=2, byteorder=0)
-		bp_mmHg = self.ins.read_float(18, functioncode=3, number_of_registers=2, byteorder=0)
-		rh = self.ins.read_float(20, functioncode=3, number_of_registers=2, byteorder=0)
-		rht_c = self.ins.read_float(22, functioncode=3, number_of_registers=2, byteorder=0)
-		tiltNS_deg = self.ins.read_float(24, functioncode=3, number_of_registers=2, byteorder=0)
-		tiltWE_deg = self.ins.read_float(26, functioncode=3, number_of_registers=2, byteorder=0)
-		
-		weather_data = WeatherData(slrFD_W, rain_mm, strikes, dist_km, ws_ms, windDir, maxWS_ms, airT_C, vp_mmHg, bp_mmHg, rh, rht_c, tiltNS_deg, tiltWE_deg)
-		return weather_data
-
 		
 	def print_data_test(self):
 		print(str(self.weather_data.slrFD_W))
