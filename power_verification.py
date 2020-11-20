@@ -18,7 +18,7 @@ weather_data_list = []
 
 # How many minutes of data to store in weather_data_list
 # This is dependant on how the ML model was trained
-mins_of_previous_data = 3
+mins_of_previous_data = 15
 
 # Pull the relevant data needed for power prediction verification
 def format_current_weather_data(datalogger):
@@ -88,9 +88,7 @@ class PowerPredictionRunner(Thread):
 		# How many minutes to predict power in the future
 		self.predict_out_mins = 15
 		self.the_date = datetime.utcnow()
-		#self.weather_data = [] # includes 4 past weather datas and current weather data
-		#self.get_previous_data()
-
+		
 	def run(self):
 		while(True):
 			starttime = time.time()
