@@ -18,7 +18,7 @@ weather_data_list = []
 
 # How many minutes of data to store in weather_data_list
 # This is dependant on how the ML model was trained
-mins_of_previous_data = 3
+mins_of_previous_data = 15
 
 # Pull the relevant data needed for power prediction verification
 def format_current_weather_data(datalogger):
