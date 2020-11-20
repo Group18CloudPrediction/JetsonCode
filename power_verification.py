@@ -88,9 +88,7 @@ class PowerPredictionRunner(Thread):
 		# How many minutes to predict power in the future
 		self.predict_out_mins = 15
 		self.the_date = datetime.utcnow()
-		#self.weather_data = [] # includes 4 past weather datas and current weather data
-		#self.get_previous_data()
-
+		
 	def run(self):
 		while(True):
 			starttime = time.time()
