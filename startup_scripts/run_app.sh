@@ -3,6 +3,6 @@
 while :
 do
 
-python3 ../app.py
+python3 /home/cloud-tracking/Desktop/JetsonCode-master-run/JetsonCode-master/app.py
 
 done
