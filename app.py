@@ -205,8 +205,8 @@ def main():
     sock = initialize_socketio(URL_APP_SERVER)
 
     global db
-    client = pymongo.MongoClient("mongodb+srv://" + creds.username + ":" +
-                                 creds.password + "@cluster0.lgezy.mongodb.net/<dbname>?retryWrites=true&w=majority")
+    client = pymongo.MongoClient(creds.base_url + creds.username + creds.seperator +
+                                 creds.password + creds.cluster_url)
     db = client.cloudTrackingData
 
     pipe = create_ffmpeg_pipe()
