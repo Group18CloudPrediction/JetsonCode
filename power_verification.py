@@ -66,7 +66,7 @@ class PowerPredictionRunner(Thread):
 
 		#creds will need to be created on each system
 		self.client = pymongo.MongoClient(creds.base_url + creds.username + creds.separator + creds.password + creds.cluster_url)
-		self.db = self.client.cloudTrackingData
+		self.db = self.client.CloudTrackingData
 		datalogger_connected = False
 
 		# Continue checking for a datalogger connection at the given USB address
