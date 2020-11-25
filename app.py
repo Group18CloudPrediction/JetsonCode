@@ -9,6 +9,7 @@ import pymongo
 import socketio
 
 from config import cloud_tracking_config as ct_cfg, creds, substation_info as substation_cfg
+from config import cloud_tracking_config 
 from imageProcessing import fisheye_mask as fisheye, coverage
 from opticalFlow import opticalDense
 
@@ -18,7 +19,7 @@ def current_milli_time(): return int(round(time.time() * 1000))
 
 # Constants
 # URL_APP_SERVER          = 'http://localhost:3001/'
-URL_APP_SERVER = 'https://cloudtracking-v2.herokuapp.com/'
+URL_APP_SERVER = cloud_tracking_config.URL_APP_SERVER #'https://cloudtracking-v2.herokuapp.com/'
 DISPLAY_SIZE = (512, 384)
 MASK_RADIUS_RATIO = 3.5
 SECONDS_PER_FRAME = 1
@@ -205,8 +206,8 @@ def main():
     sock = initialize_socketio(URL_APP_SERVER)
 
     global db
-    client = pymongo.MongoClient("mongodb+srv://" + creds.username + ":" +
-                                 creds.password + "@cluster0.lgezy.mongodb.net/<dbname>?retryWrites=true&w=majority")
+    client = pymongo.MongoClient(creds.base_url + creds.username + creds.seperator +
+                                 creds.password + creds.cluster_url)
     db = client.cloudTrackingData
 
     pipe = create_ffmpeg_pipe()
