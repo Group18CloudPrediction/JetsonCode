@@ -98,7 +98,7 @@ class PowerPredictionRunner(Thread):
 			# starting at the current minute
 			self.datalogger.poll()
 			add_current_data(self.datalogger)
-			final_data = Predict.toTimeSeries(weather_data_list, timesteps=3)
+			final_data = Predict.toTimeSeries(weather_data_list, timesteps=15)
 
 			print("final_data: " + str(final_data))
 
