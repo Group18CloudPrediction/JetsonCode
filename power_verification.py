@@ -266,7 +266,7 @@ class Get_Data_On_Startup(Thread):
 		self.finished_getting_data_event = finished_getting_data_event
 		self.run_num = 1
 		self.client = pymongo.MongoClient(creds.base_url + creds.username + creds.separator + creds.password + creds.cluster_url)
-		self.db = self.client.cloudTrackingData
+		self.db = self.client.CloudTrackingData
 		datalogger_connected = False
 
 		# Continue checking for a datalogger connection at the given USB address
