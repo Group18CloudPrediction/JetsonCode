@@ -206,7 +206,7 @@ def main():
     sock = initialize_socketio(URL_APP_SERVER)
 
     global db
-    client = pymongo.MongoClient(creds.base_url + creds.username + creds.seperator +
+    client = pymongo.MongoClient(creds.base_url + creds.username + creds.separator +
                                  creds.password + creds.cluster_url)
     db = client.cloudTrackingData
 
