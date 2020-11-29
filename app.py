@@ -208,7 +208,7 @@ def main():
     global db
     client = pymongo.MongoClient(creds.base_url + creds.username + creds.seperator +
                                  creds.password + creds.cluster_url)
-    db = client.cloudTrackingData
+    db = client.CloudTrackingData
 
     pipe = create_ffmpeg_pipe()
 
