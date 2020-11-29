@@ -12,7 +12,7 @@ class VerifiedData:
 		self.actual_value = av
 
 client = pymongo.MongoClient("mongodb+srv://" + creds.username + ":" + creds.password + "@cluster0.lgezy.mongodb.net/<dbname>?retryWrites=true&w=majority")
-db = client.cloudTrackingData
+db = client.CloudTrackingData
 
 db_response = db.PowerVerificationData.find().sort([('_id', -1)]).limit(1)
 
