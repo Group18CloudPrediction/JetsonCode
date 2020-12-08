@@ -21,8 +21,8 @@ NUM_STEPS   = 15 # How many timesteps to consider at once
 
 # Remember to save favorite model
 # TODO pass model as filename?
-model_file  = './power_prediction/models/Power_Pred_model_2020_11_03_01_03.json'
-weight_file = './power_prediction/weights/Power_Pred_weights_2020_11_03_01_03.h5'
+model_file  = '/home/cloud-tracking/Desktop/JetsonCode-master-run/JetsonCode-master/power_prediction/models/Power_Pred_model_2020_11_03_01_03.json'
+weight_file = '/home/cloud-tracking/Desktop/JetsonCode-master-run/JetsonCode-master/power_prediction/weights/Power_Pred_weights_2020_11_03_01_03.h5'
 
 # LOAD FROM DISK
 json_file = open(model_file, 'r')
@@ -60,12 +60,12 @@ def downScale(data):
     # Apply scalars to make data NN readable
     # When this is called, the time are the last 4 values, integrate hr/min and month/day
     for t in range(NUM_STEPS):
-        data[t][-4] = (data[t][-4] - 1) + ((data[t][-3] - 1)/31.0) # Month.(Day/31)
-        #data[0][t][-4] = (data[0][t][-4] - 1) + ((data[0][t][-3] - 1)/31.0) # Month.(Day/31)
-        data[t][-3] = (data[t][-2] - 1) + ((data[t][-1] - 1)/60.0) # Hour.(Minute/60)
-        #data[0][t][-3] = (data[0][t][-2] - 1) + ((data[0][t][-1] - 1)/60.0) # Hour.(Minute/60)
-    data = data[:,:-2] # Trim off 2 items for days and minutes being removed
-    #data = data[0,:,:-2] # Trim off 2 items for days and minutes being removed
+        # data[t][-4] = (data[t][-4] - 1) + ((data[t][-3] - 1)/31.0) # Month.(Day/31)
+        data[0][t][-4] = (data[0][t][-4] - 1) + ((data[0][t][-3] - 1)/31.0) # Month.(Day/31)
+        # data[t][-3] = (data[t][-2] - 1) + ((data[t][-1] - 1)/60.0) # Hour.(Minute/60)
+        data[0][t][-3] = (data[0][t][-2] - 1) + ((data[0][t][-1] - 1)/60.0) # Hour.(Minute/60)
+    # data = data[:,:-2] # Trim off 2 items for days and minutes being removed
+    data = data[0,:,:-2] # Trim off 2 items for days and minutes being removed
     output = np.c_[data[:,0]/GHISCALAR, # GHI
                    data[:,1]/360.0,     # WindDir
                    data[:,2]/SPDSCALAR, # WindSpd
