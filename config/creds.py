@@ -1,0 +1,5 @@
+base_url = "mongodb://"
+separator = ":"
+cluster_url = "@<YOUR WEB SERVER IP>:27017/CloudTrackingData?gssapiServiceName=mongodb&retryWrites=true&authSource=admin&w=1"
+username = "cloud-tracking"
+password = "<YOUR PASSWORD>"
